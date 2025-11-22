@@ -1,0 +1,8 @@
+Flask
+Flask-Cors
+Flask-JWT-Extended
+SQLAlchemy
+Flask-SQLAlchemy
+requests
+Flask-Migrate
+colorama

@@ -1,0 +1,98 @@
+# backend/docker-compose.yml
+version: '3.8'
+
+services:
+  # Service Authentification
+  auth-service:
+    build: ./services/auth-service
+    ports:
+      - "5001:5001"
+    environment:
+      - DATABASE_URL=sqlite:///auth.db
+      - PORT=5001
+      - JWT_SECRET=your_jwt_secret_here
+    volumes:
+      - ./services/auth-service:/app
+    networks:
+      - clinic-network
+
+  # Service Patients
+  patient-service:
+    build: ./services/patient-service
+    ports:
+      - "5002:5002"
+    environment:
+      - DATABASE_URL=sqlite:///patients.db
+      - PORT=5002
+    volumes:
+      - ./services/patient-service:/app
+    networks:
+      - clinic-network
+
+  # Service Rendez-vous
+  appointment-service:
+    build: ./services/appointment-service
+    ports:
+      - "5003:5003"
+    environment:
+      - DATABASE_URL=sqlite:///appointments.db
+      - PORT=5003
+      - PATIENT_SERVICE_URL=http://patient-service:5002
+    volumes:
+      - ./services/appointment-service:/app
+    networks:
+      - clinic-network
+    depends_on:
+      - patient-service
+
+  # Service Ordonnances
+  prescription-service:
+    build: ./services/prescription-service
+    ports:
+      - "5004:5004"
+    environment:
+      - DATABASE_URL=sqlite:///prescriptions.db
+      - PORT=5004
+      - PATIENT_SERVICE_URL=http://patient-service:5002
+      - MEDICINE_SERVICE_URL=http://medicine-service:5005
+    volumes:
+      - ./services/prescription-service:/app
+    networks:
+      - clinic-network
+    depends_on:
+      - patient-service
+      - medicine-service
+
+  # Service Médicaments
+  medicine-service:
+    build: ./services/medicine-service
+    ports:
+      - "5005:5005"
+    environment:
+      - DATABASE_URL=sqlite:///medicines.db
+      - PORT=5005
+    volumes:
+      - ./services/medicine-service:/app
+    networks:
+      - clinic-network
+
+  # Base de données PostgreSQL (optionnel, pour production)
+  postgres:
+    image: postgres:14
+    environment:
+      - POSTGRES_USER=clinic_user
+      - POSTGRES_PASSWORD=clinic_password
+      - POSTGRES_DB=clinic_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - clinic-network
+
+networks:
+  clinic-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
