@@ -1,23 +1,62 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
-/.pnp
+# --------------------------------------------------------
+# NODE / REACT
+# --------------------------------------------------------
+node_modules/
+.pnp
 .pnp.js
+coverage/
+build/
+dist/
 
-# testing
-/coverage
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# production
-/build
-
-# misc
-.DS_Store
+# React environment files
+.env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# --------------------------------------------------------
+# PYTHON / FLASK
+# --------------------------------------------------------
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# SQLite databases
+*.db
+
+# Flask instance folders (contains config + SQLite)
+instance/
+*/instance/
+
+# --------------------------------------------------------
+# DOCKER
+# --------------------------------------------------------
+# If you generate images or temporary files:
+/docker-compose.override.yml
+**/.dockerignore copy
+
+# --------------------------------------------------------
+# OS files
+# --------------------------------------------------------
+.DS_Store
+Thumbs.db
+
+# --------------------------------------------------------
+# EDITOR
+# --------------------------------------------------------
+.vscode/
+.idea/
+
+# --------------------------------------------------------
+# BUILD ARTIFACTS
+# --------------------------------------------------------
+*.log
+git add .gitignore
