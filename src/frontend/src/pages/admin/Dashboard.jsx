@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Calendar, FileText, Pill, Activity, TrendingUp, Clock, AlertCircle, Download, Search, UserCheck } from 'lucide-react';
+import { History } from 'lucide-react';
 
 // URLs des microservices
 const API_URLS = {
@@ -111,21 +112,39 @@ const [newMedicine, setNewMedicine] = useState({
   expiry_date: '',
   description: ''
 });
-  useEffect(() => {
-    if (activeTab === 'dashboard') {
-      fetchDashboardData();
-    } else if (activeTab === 'patients') {
-      fetchPatients();
-    } else if (activeTab === 'appointments') {
-      fetchAppointments();
-    } else if (activeTab === 'prescriptions') {
-      fetchPrescriptions();
-    } else if (activeTab === 'medicines') {
-      fetchMedicines();
-    } else if (activeTab === 'doctors') {
-      fetchDoctors();
-    }
-  }, [activeTab]);
+const [activityLogs, setActivityLogs] = useState([]);
+const [activityFilters, setActivityFilters] = useState({
+  actionType: '',
+  user: '',
+  startDate: '',
+  endDate: ''
+});
+const [activityPage, setActivityPage] = useState(1);
+const [activityPerPage] = useState(20);
+const [totalActivityLogs, setTotalActivityLogs] = useState(0);
+const [showDoctorProfileModal, setShowDoctorProfileModal] = useState(false);
+const [selectedDoctorProfile, setSelectedDoctorProfile] = useState(null);
+const [doctorAppointments, setDoctorAppointments] = useState([]);
+const [doctorPatients, setDoctorPatients] = useState([]);
+const [loadingProfile, setLoadingProfile] = useState(false);
+  // Modifier le useEffect existant (ligne ~120)
+useEffect(() => {
+  if (activeTab === 'dashboard') {
+    fetchDashboardData();
+  } else if (activeTab === 'patients') {
+    fetchPatients();
+  } else if (activeTab === 'appointments') {
+    fetchAppointments();
+  } else if (activeTab === 'prescriptions') {
+    fetchPrescriptions();
+  } else if (activeTab === 'medicines') {
+    fetchMedicines();
+  } else if (activeTab === 'doctors') {
+    fetchDoctors();
+  } else if (activeTab === 'activity') {
+    fetchActivityLogs();
+  }
+}, [activeTab, activityPage, activityFilters]); // Ajouter les dépendances
 
   const fetchDashboardData = async () => {
     try {
@@ -286,7 +305,52 @@ const [newMedicine, setNewMedicine] = useState({
       setLoading(false);
     }
   };
+  const fetchDoctorProfile = async (doctorId) => {
+  try {
+    setLoadingProfile(true);
+    
+    // Récupérer les infos du médecin
+    const doctorRes = await fetch(`${API_URLS.doctor}/doctors/${doctorId}`);
+    const doctorData = await doctorRes.json();
+    
+    if (doctorData.success) {
+      setSelectedDoctorProfile(doctorData.doctor);
+      
+      // Récupérer tous les rendez-vous de ce médecin
+      const appointmentsRes = await fetch(`${API_URLS.appointment}/appointments?doctor_id=${doctorId}&per_page=100`);
+      const appointmentsData = await appointmentsRes.json();
+      
+      if (appointmentsData.success) {
+        setDoctorAppointments(appointmentsData.appointments);
+        
+        // Extraire les patients uniques
+        const uniquePatientIds = [...new Set(appointmentsData.appointments.map(apt => apt.patient_id))];
+        
+        // Récupérer les infos des patients
+        const patientsPromises = uniquePatientIds.map(patientId => 
+          fetch(`${API_URLS.patient}/patients/${patientId}`).then(res => res.json())
+        );
+        
+        const patientsResults = await Promise.all(patientsPromises);
+        const patientsData = patientsResults
+          .filter(result => result.success)
+          .map(result => result.patient);
+        
+        setDoctorPatients(patientsData);
+      }
+    }
+  } catch (error) {
+    console.error('Erreur lors du chargement du profil:', error);
+    alert('Erreur lors du chargement du profil du médecin');
+  } finally {
+    setLoadingProfile(false);
+  }
+};
 
+const openDoctorProfile = async (doctor) => {
+  setShowDoctorProfileModal(true);
+  await fetchDoctorProfile(doctor.id);
+};
   const fetchRecentActivities = async () => {
     const activities = [];
     try {
@@ -348,7 +412,54 @@ const [newMedicine, setNewMedicine] = useState({
     }
     setRecentActivities(activities.slice(0, 4));
   };
+  // Ajouter après les fonctions fetch existantes (ligne ~350)
+const logActivity = async (action, entity, entityId, details = '') => {
+  try {
+    const activityData = {
+      action, // 'create', 'update', 'delete'
+      entity, // 'patient', 'doctor', 'appointment', 'prescription', 'medicine'
+      entity_id: entityId,
+      user: 'Admin', // Remplacer par le vrai utilisateur connecté
+      details,
+      timestamp: new Date().toISOString()
+    };
 
+    // Enregistrer dans le localStorage (ou envoyer à une API dédiée)
+    const existingLogs = JSON.parse(localStorage.getItem('activityLogs') || '[]');
+    existingLogs.unshift(activityData);
+    localStorage.setItem('activityLogs', JSON.stringify(existingLogs.slice(0, 1000))); // Garder max 1000 logs
+  } catch (error) {
+    console.error('Erreur lors de l\'enregistrement de l\'activité:', error);
+  }
+};
+
+const fetchActivityLogs = () => {
+  try {
+    setLoading(true);
+    const logs = JSON.parse(localStorage.getItem('activityLogs') || '[]');
+    
+    // Filtrer les logs
+    let filtered = logs.filter(log => {
+      if (activityFilters.actionType && log.action !== activityFilters.actionType) return false;
+      if (activityFilters.user && !log.user.toLowerCase().includes(activityFilters.user.toLowerCase())) return false;
+      if (activityFilters.startDate && new Date(log.timestamp) < new Date(activityFilters.startDate)) return false;
+      if (activityFilters.endDate && new Date(log.timestamp) > new Date(activityFilters.endDate)) return false;
+      return true;
+    });
+
+    setTotalActivityLogs(filtered.length);
+    
+    // Paginer
+    const startIndex = (activityPage - 1) * activityPerPage;
+    const paginatedLogs = filtered.slice(startIndex, startIndex + activityPerPage);
+    
+    setActivityLogs(paginatedLogs);
+  } catch (error) {
+    console.error('Erreur:', error);
+  } finally {
+    setLoading(false);
+  }
+};
   const getTimeAgo = (dateString) => {
     try {
       const date = new Date(dateString);
@@ -553,6 +664,7 @@ const handleAddPatient = async () => {
     const result = await response.json();
 
     if (result.success) {
+      await logActivity('create', 'patient', result.patient.id, `Patient ${newPatient.first_name} ${newPatient.last_name} ajouté`);
       alert('✅ Patient ajouté avec succès !');
       setShowAddPatientModal(false);
       setNewPatient({
@@ -605,6 +717,7 @@ const handleEditPatient = async () => {
     const result = await response.json();
 
     if (result.success) {
+      await logActivity('update', 'patient', selectedPatient.id, `Patient ${selectedPatient.first_name} ${selectedPatient.last_name} modifié`);
       alert('✅ Patient modifié avec succès !');
       setShowEditPatientModal(false);
       setSelectedPatient(null);
@@ -632,6 +745,7 @@ const handleDeletePatient = async (patient) => {
     const result = await response.json();
 
     if (result.success) {
+       await logActivity('delete', 'patient', patient.id, `Patient ${patient.first_name} ${patient.last_name} supprimé`);
       alert('✅ Patient supprimé avec succès !');
       fetchPatients();
       if (activeTab === 'dashboard') fetchDashboardData();
@@ -687,6 +801,8 @@ const handleAddDoctor = async () => {
     const result = await response.json();
 
     if (result.success) {
+       await logActivity('create', 'doctor', result.doctor?.id || 'N/A', 
+        `Médecin Dr. ${newDoctor.first_name} ${newDoctor.last_name} (${newDoctor.specialization}) ajouté`);
       alert('✅ Médecin ajouté avec succès !');
       setShowAddDoctorModal(false);
       setNewDoctor({
@@ -746,6 +862,8 @@ const handleEditDoctor = async () => {
     const result = await response.json();
 
     if (result.success) {
+      await logActivity('update', 'doctor', selectedDoctor.id, 
+        `Médecin Dr. ${selectedDoctor.first_name} ${selectedDoctor.last_name} modifié`);
       alert('✅ Médecin modifié avec succès !');
       setShowEditDoctorModal(false);
       setSelectedDoctor(null);
@@ -773,6 +891,8 @@ const handleDeleteDoctor = async (doctor) => {
     const result = await response.json();
 
     if (result.success) {
+      await logActivity('delete', 'doctor', doctor.id, 
+        `Médecin Dr. ${doctor.first_name} ${doctor.last_name} (${doctor.specialization}) supprimé`);
       alert('✅ Médecin supprimé avec succès !');
       fetchDoctors();
       if (activeTab === 'dashboard') fetchDashboardData();
@@ -817,6 +937,8 @@ const handleAddAppointment = async () => {
     const result = await response.json();
 
     if (result.success) {
+      await logActivity('create', 'appointment', result.appointment?.id || 'N/A', 
+        `Rendez-vous créé: ${patientName} avec Dr. ${doctorName} le ${new Date(appointmentDateTime).toLocaleDateString('fr-FR')}`);
       alert('✅ Rendez-vous créé avec succès !');
       setShowAddAppointmentModal(false);
       setNewAppointment({
@@ -859,6 +981,9 @@ const handleEditAppointment = async () => {
     const result = await response.json();
 
     if (result.success) {
+      await logActivity('update', 'appointment', selectedAppointment.id, 
+        `Rendez-vous #${selectedAppointment.id} modifié (Statut: ${selectedAppointment.status})`);
+      
       alert('✅ Rendez-vous modifié avec succès !');
       setShowEditAppointmentModal(false);
       setSelectedAppointment(null);
@@ -886,6 +1011,8 @@ const handleDeleteAppointment = async (appointment) => {
     const result = await response.json();
 
     if (result.success) {
+       await logActivity('delete', 'appointment', appointment.id, 
+        `Rendez-vous du ${new Date(appointment.appointment_date).toLocaleDateString('fr-FR')} avec ${appointment.doctor_name} supprimé`);
       alert('✅ Rendez-vous supprimé avec succès !');
       fetchAppointments();
       if (activeTab === 'dashboard') fetchDashboardData();
@@ -935,6 +1062,9 @@ const handleAddMedicine = async () => {
     const result = await response.json();
 
     if (result.success) {
+      await logActivity('create', 'medicine', result.medicine?.id || 'N/A', 
+        `Médicament "${newMedicine.name}" (${newMedicine.category}) ajouté - Stock: ${newMedicine.stock_quantity}`);
+
       alert('✅ Médicament ajouté avec succès !');
       setShowAddMedicineModal(false);
       setNewMedicine({
@@ -978,6 +1108,8 @@ const handleEditMedicine = async () => {
     const result = await response.json();
 
     if (result.success) {
+      await logActivity('update', 'medicine', selectedMedicine.id, 
+        `Médicament "${selectedMedicine.name}" modifié - Stock: ${selectedMedicine.stock_quantity}`);
       alert('✅ Médicament modifié avec succès !');
       setShowEditMedicineModal(false);
       setSelectedMedicine(null);
@@ -1005,6 +1137,8 @@ const handleDeleteMedicine = async (medicine) => {
     const result = await response.json();
 
     if (result.success) {
+      await logActivity('delete', 'medicine', medicine.id, 
+        `Médicament "${medicine.name}" (${medicine.category}) supprimé`);
       alert('✅ Médicament supprimé avec succès !');
       fetchMedicines();
       if (activeTab === 'dashboard') fetchDashboardData();
@@ -1525,6 +1659,12 @@ const handleDeleteMedicine = async (medicine) => {
                   <td className="px-6 py-4 text-sm">
   <div className="flex gap-2">
     <button
+      onClick={() => openDoctorProfile(doctor)}
+      className="px-3 py-1 bg-purple-100 text-purple-600 rounded hover:bg-purple-200 transition"
+    >
+      Voir profil
+    </button>
+    <button
       onClick={() => {
         setSelectedDoctor(doctor);
         setShowEditDoctorModal(true);
@@ -1549,7 +1689,191 @@ const handleDeleteMedicine = async (medicine) => {
       </div>
     </div>
   );
+ // Ajouter après renderDoctorsPage (ligne ~1150)
+const renderActivityPage = () => {
+  const totalPages = Math.ceil(totalActivityLogs / activityPerPage);
+  
+  const getActionBadge = (action) => {
+    const badges = {
+      create: 'bg-green-100 text-green-800',
+      update: 'bg-blue-100 text-blue-800',
+      delete: 'bg-red-100 text-red-800'
+    };
+    const labels = {
+      create: 'Création',
+      update: 'Modification',
+      delete: 'Suppression'
+    };
+    return { class: badges[action] || 'bg-gray-100 text-gray-800', label: labels[action] || action };
+  };
 
+  const getEntityLabel = (entity) => {
+    const labels = {
+      patient: 'Patient',
+      doctor: 'Médecin',
+      appointment: 'Rendez-vous',
+      prescription: 'Ordonnance',
+      medicine: 'Médicament'
+    };
+    return labels[entity] || entity;
+  };
+
+  return (
+    <div>
+      <div className="mb-6 flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-800">Historique des Activités</h2>
+        <button
+          onClick={() => {
+            setActivityFilters({ actionType: '', user: '', startDate: '', endDate: '' });
+            setActivityPage(1);
+          }}
+          className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
+        >
+          Réinitialiser filtres
+        </button>
+      </div>
+
+      {/* Filtres */}
+      <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Type d'action</label>
+            <select
+              value={activityFilters.actionType}
+              onChange={(e) => {
+                setActivityFilters({...activityFilters, actionType: e.target.value});
+                setActivityPage(1);
+              }}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="">Tous</option>
+              <option value="create">Création</option>
+              <option value="update">Modification</option>
+              <option value="delete">Suppression</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Utilisateur</label>
+            <input
+              type="text"
+              value={activityFilters.user}
+              onChange={(e) => {
+                setActivityFilters({...activityFilters, user: e.target.value});
+                setActivityPage(1);
+              }}
+              placeholder="Rechercher un utilisateur"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Date début</label>
+            <input
+              type="date"
+              value={activityFilters.startDate}
+              onChange={(e) => {
+                setActivityFilters({...activityFilters, startDate: e.target.value});
+                setActivityPage(1);
+              }}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Date fin</label>
+            <input
+              type="date"
+              value={activityFilters.endDate}
+              onChange={(e) => {
+                setActivityFilters({...activityFilters, endDate: e.target.value});
+                setActivityPage(1);
+              }}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Tableau */}
+      <div className="bg-white rounded-lg shadow-md overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date & Heure</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Utilisateur</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Entité</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Détails</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {activityLogs.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
+                    Aucune activité enregistrée
+                  </td>
+                </tr>
+              ) : (
+                activityLogs.map((log, index) => {
+                  const actionBadge = getActionBadge(log.action);
+                  return (
+                    <tr key={index} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        {new Date(log.timestamp).toLocaleString('fr-FR')}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">{log.user}</td>
+                      <td className="px-6 py-4">
+                        <span className={`px-3 py-1 text-xs font-semibold rounded-full ${actionBadge.class}`}>
+                          {actionBadge.label}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="px-3 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
+                          {getEntityLabel(log.entity)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">{log.details}</td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="bg-gray-50 px-6 py-4 flex items-center justify-between border-t">
+            <div className="text-sm text-gray-700">
+              Affichage {((activityPage - 1) * activityPerPage) + 1} à {Math.min(activityPage * activityPerPage, totalActivityLogs)} sur {totalActivityLogs} activités
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setActivityPage(p => Math.max(1, p - 1))}
+                disabled={activityPage === 1}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Précédent
+              </button>
+              <span className="px-4 py-2 bg-indigo-600 text-white rounded-lg">
+                {activityPage} / {totalPages}
+              </span>
+              <button
+                onClick={() => setActivityPage(p => Math.min(totalPages, p + 1))}
+                disabled={activityPage === totalPages}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Suivant
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
   const renderDashboard = () => (
     <>
       <div className="mb-8">
@@ -1726,6 +2050,17 @@ const handleDeleteMedicine = async (medicine) => {
           <Pill className="w-5 h-5 mr-2" />
           Médicaments
         </button>
+        <button
+  onClick={() => setActiveTab('activity')}
+  className={`flex items-center px-4 py-2 rounded-lg font-medium transition ${
+    activeTab === 'activity'
+      ? 'bg-indigo-600 text-white shadow-md'
+      : 'bg-white text-gray-700 shadow hover:bg-indigo-50'
+  }`}
+>
+  <History className="w-5 h-5 mr-2" />
+  Historique
+</button>
       </div>
 
       {/* CONTENU SELON LE TAB */}
@@ -1744,6 +2079,7 @@ const handleDeleteMedicine = async (medicine) => {
           {activeTab === 'appointments' && renderAppointmentsPage()}
           {activeTab === 'prescriptions' && renderPrescriptionsPage()}
           {activeTab === 'medicines' && renderMedicinesPage()}
+          {activeTab === 'activity' && renderActivityPage()}
         </>
       )}
       {/* Modal Ajouter Ordonnance */}
@@ -2687,6 +3023,235 @@ placeholder="Cardiologue, Pédiatre, etc." className="w-full px-4 py-2 border bo
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+)}
+{/* Modal Profil Médecin */}
+{showDoctorProfileModal && selectedDoctorProfile && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+    <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[95vh] overflow-y-auto">
+      <div className="p-6">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-6 border-b pb-4">
+          <div className="flex items-center">
+            <div className="h-16 w-16 rounded-full bg-gradient-to-br from-green-400 to-blue-500 flex items-center justify-center text-white text-2xl font-bold mr-4">
+              {selectedDoctorProfile.first_name[0]}{selectedDoctorProfile.last_name[0]}
+            </div>
+            <div>
+              <h2 className="text-3xl font-bold text-gray-800">
+                Dr. {selectedDoctorProfile.first_name} {selectedDoctorProfile.last_name}
+              </h2>
+              <p className="text-lg text-gray-600">{selectedDoctorProfile.specialization}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setShowDoctorProfileModal(false);
+              setSelectedDoctorProfile(null);
+              setDoctorAppointments([]);
+              setDoctorPatients([]);
+            }}
+            className="text-gray-500 hover:text-gray-700 text-3xl"
+          >
+            ×
+          </button>
+        </div>
+
+        {loadingProfile ? (
+          <div className="flex justify-center items-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+          </div>
+        ) : (
+          <>
+            {/* Informations du médecin */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-6 shadow-sm">
+                <div className="flex items-center mb-2">
+                  <UserCheck className="w-5 h-5 text-indigo-600 mr-2" />
+                  <h3 className="font-semibold text-gray-700">Informations générales</h3>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <p><span className="font-medium">Email:</span> {selectedDoctorProfile.email}</p>
+                  <p><span className="font-medium">Téléphone:</span> {selectedDoctorProfile.phone}</p>
+                  <p><span className="font-medium">Licence:</span> {selectedDoctorProfile.license_number || 'N/A'}</p>
+                  <p>
+                    <span className="font-medium">Statut:</span> 
+                    <span className={`ml-2 px-2 py-1 text-xs rounded-full ${
+                      selectedDoctorProfile.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {selectedDoctorProfile.status === 'active' ? 'Actif' : 'Inactif'}
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg p-6 shadow-sm">
+                <div className="flex items-center mb-2">
+                  <Activity className="w-5 h-5 text-purple-600 mr-2" />
+                  <h3 className="font-semibold text-gray-700">Expérience</h3>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <p><span className="font-medium">Années d'expérience:</span> {selectedDoctorProfile.years_of_experience || 0} ans</p>
+                  <p><span className="font-medium">Frais consultation:</span> {selectedDoctorProfile.consultation_fee || 0}€</p>
+                  <p><span className="font-medium">Membre depuis:</span> {new Date(selectedDoctorProfile.created_at).toLocaleDateString('fr-FR')}</p>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-green-50 to-teal-50 rounded-lg p-6 shadow-sm">
+                <div className="flex items-center mb-2">
+                  <TrendingUp className="w-5 h-5 text-green-600 mr-2" />
+                  <h3 className="font-semibold text-gray-700">Statistiques</h3>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <p><span className="font-medium">Total rendez-vous:</span> {doctorAppointments.length}</p>
+                  <p><span className="font-medium">Patients uniques:</span> {doctorPatients.length}</p>
+                  <p><span className="font-medium">RDV cette semaine:</span> {
+                    doctorAppointments.filter(apt => {
+                      const aptDate = new Date(apt.appointment_date);
+                      const now = new Date();
+                      const weekStart = new Date(now.setDate(now.getDate() - now.getDay()));
+                      const weekEnd = new Date(weekStart);
+                      weekEnd.setDate(weekStart.getDate() + 7);
+                      return aptDate >= weekStart && aptDate < weekEnd;
+                    }).length
+                  }</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Patients du médecin */}
+            <div className="mb-8">
+              <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <Users className="w-6 h-6 mr-2 text-indigo-600" />
+                Patients suivis ({doctorPatients.length})
+              </h3>
+              
+              {doctorPatients.length === 0 ? (
+                <div className="bg-gray-50 rounded-lg p-8 text-center text-gray-500">
+                  Aucun patient n'a encore pris rendez-vous avec ce médecin
+                </div>
+              ) : (
+                <div className="bg-white rounded-lg shadow-md overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Patient</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Genre</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre de RDV</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dernier RDV</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {doctorPatients.map(patient => {
+                          const patientAppointments = doctorAppointments.filter(apt => apt.patient_id === patient.id);
+                          const lastAppointment = patientAppointments.sort((a, b) => 
+                            new Date(b.appointment_date) - new Date(a.appointment_date)
+                          )[0];
+                          
+                          return (
+                            <tr key={patient.id} className="hover:bg-gray-50">
+                              <td className="px-6 py-4">
+                                <div className="flex items-center">
+                                  <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
+                                    <span className="text-indigo-600 font-medium">
+                                      {patient.first_name[0]}{patient.last_name[0]}
+                                    </span>
+                                  </div>
+                                  <div className="ml-4">
+                                    <div className="text-sm font-medium text-gray-900">
+                                      {patient.first_name} {patient.last_name}
+                                    </div>
+                                    <div className="text-sm text-gray-500">{patient.email}</div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 text-sm text-gray-900">{patient.phone}</td>
+                              <td className="px-6 py-4">
+                                <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                                  patient.gender === 'Homme' ? 'bg-blue-100 text-blue-800' : 'bg-pink-100 text-pink-800'
+                                }`}>
+                                  {patient.gender}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className="px-3 py-1 bg-indigo-100 text-indigo-800 text-xs font-semibold rounded-full">
+                                  {patientAppointments.length} RDV
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-sm text-gray-500">
+                                {lastAppointment ? new Date(lastAppointment.appointment_date).toLocaleDateString('fr-FR') : 'N/A'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Rendez-vous récents */}
+            <div>
+              <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <Calendar className="w-6 h-6 mr-2 text-purple-600" />
+                Rendez-vous récents ({doctorAppointments.length})
+              </h3>
+              
+              {doctorAppointments.length === 0 ? (
+                <div className="bg-gray-50 rounded-lg p-8 text-center text-gray-500">
+                  Aucun rendez-vous enregistré
+                </div>
+              ) : (
+                <div className="bg-white rounded-lg shadow-md overflow-hidden">
+                  <div className="overflow-x-auto max-h-96">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50 sticky top-0">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date & Heure</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Patient</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Motif</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Statut</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {doctorAppointments
+                          .sort((a, b) => new Date(b.appointment_date) - new Date(a.appointment_date))
+                          .slice(0, 20)
+                          .map(apt => (
+                            <tr key={apt.id} className="hover:bg-gray-50">
+                              <td className="px-6 py-4 text-sm text-gray-900">
+                                {new Date(apt.appointment_date).toLocaleString('fr-FR')}
+                              </td>
+                              <td className="px-6 py-4 text-sm text-gray-900">
+                                {apt.patient?.name || `Patient #${apt.patient_id}`}
+                              </td>
+                              <td className="px-6 py-4 text-sm text-gray-500">{apt.reason || 'N/A'}</td>
+                              <td className="px-6 py-4">
+                                <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                                  apt.status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
+                                  apt.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                  apt.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {apt.status === 'scheduled' ? 'Planifié' : 
+                                   apt.status === 'completed' ? 'Terminé' :
+                                   apt.status === 'cancelled' ? 'Annulé' : apt.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   </div>
