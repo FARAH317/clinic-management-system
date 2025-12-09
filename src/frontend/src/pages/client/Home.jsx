@@ -87,90 +87,140 @@ function ClinicLandingPage() {
   };
 
   const handleAppointmentSubmit = async (e) => {
-    e.preventDefault();
+  e.preventDefault();
 
-    try {
-      if (!appointmentForm.first_name || !appointmentForm.last_name || 
-          !appointmentForm.email || !appointmentForm.phone) {
-        alert('❌ Veuillez remplir tous les champs obligatoires');
-        return;
-      }
-
-      const patientPayload = {
-        first_name: appointmentForm.first_name.trim(),
-        last_name: appointmentForm.last_name.trim(),
-        email: appointmentForm.email.trim(),
-        phone: appointmentForm.phone.trim(),
-        date_of_birth: appointmentForm.date_of_birth,
-        gender: appointmentForm.gender
-      };
-
-      const patientResponse = await fetch('http://localhost:5002/api/patients', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patientPayload)
-      });
-
-      const patientData = await patientResponse.json();
-
-      if (!patientData.success) {
-        alert('❌ ' + (patientData.error || 'Erreur lors de la création du profil patient'));
-        return;
-      }
-
-      const patientId = patientData.patient.id;
-
-      if (!appointmentForm.appointment_date) {
-        alert('❌ Veuillez sélectionner une date et heure');
-        return;
-      }
-
-      const formattedDate = appointmentForm.appointment_date.replace('T', ' ');
-
-      const appointmentPayload = {
-        patient_id: patientId,
-        doctor_name: appointmentForm.doctor_name,
-        appointment_date: formattedDate,
-        duration: parseInt(appointmentForm.duration),
-        reason: appointmentForm.reason.trim(),
-        notes: appointmentForm.notes.trim(),
-        first_name: appointmentForm.first_name.trim(),
-        last_name: appointmentForm.last_name.trim(),
-        email: appointmentForm.email.trim(),
-        phone: appointmentForm.phone.trim()
-      };
-
-      const response = await fetch('http://localhost:5003/api/appointments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(appointmentPayload)
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        alert('✅ Rendez-vous créé avec succès !');
-        setAppointmentForm({
-          doctor_name: appointmentForm.doctor_name,
-          appointment_date: '',
-          duration: 30,
-          reason: '',
-          notes: '',
-          first_name: '',
-          last_name: '',
-          email: '',
-          phone: '',
-          date_of_birth: '1990-01-01',
-          gender: 'Homme'
-        });
-      } else {
-        alert('❌ ' + (data.error || 'Erreur lors de la création du rendez-vous'));
-      }
-    } catch (error) {
-      console.error('Erreur:', error);
-      alert('❌ Erreur de connexion au serveur');
+  try {
+    // Validation des champs obligatoires
+    if (!appointmentForm.first_name?.trim()) {
+      alert('❌ Le prénom est obligatoire');
+      return;
     }
-  };
+    if (!appointmentForm.last_name?.trim()) {
+      alert('❌ Le nom est obligatoire');
+      return;
+    }
+
+    // Validation de l'email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!appointmentForm.email?.trim()) {
+      alert('❌ L\'email est obligatoire');
+      return;
+    }
+    if (!emailRegex.test(appointmentForm.email)) {
+      alert('❌ Format d\'email invalide (ex: exemple@gmail.com)');
+      return;
+    }
+
+    // Validation du téléphone (10 chiffres)
+    const phoneRegex = /^[0-9]{10}$/;
+    if (!appointmentForm.phone?.trim()) {
+      alert('❌ Le numéro de téléphone est obligatoire');
+      return;
+    }
+    if (!phoneRegex.test(appointmentForm.phone.replace(/\s/g, ''))) {
+      alert('❌ Le numéro de téléphone doit contenir exactement 10 chiffres');
+      return;
+    }
+
+    // Validation de la date de naissance
+    if (!appointmentForm.date_of_birth) {
+      alert('❌ La date de naissance est obligatoire');
+      return;
+    }
+    const birthDate = new Date(appointmentForm.date_of_birth);
+    const today = new Date();
+    const age = today.getFullYear() - birthDate.getFullYear();
+    if (age < 0 || age > 150) {
+      alert('❌ Date de naissance invalide');
+      return;
+    }
+
+    // Validation du rendez-vous
+    if (!appointmentForm.appointment_date) {
+      alert('❌ La date et l\'heure du rendez-vous sont obligatoires');
+      return;
+    }
+
+    const appointmentDate = new Date(appointmentForm.appointment_date);
+    if (appointmentDate < new Date()) {
+      alert('❌ La date du rendez-vous ne peut pas être dans le passé');
+      return;
+    }
+
+    if (!appointmentForm.reason?.trim()) {
+      alert('❌ Le motif du rendez-vous est obligatoire');
+      return;
+    }
+
+    const patientPayload = {
+      first_name: appointmentForm.first_name.trim(),
+      last_name: appointmentForm.last_name.trim(),
+      email: appointmentForm.email.trim().toLowerCase(),
+      phone: appointmentForm.phone.replace(/\s/g, ''),
+      date_of_birth: appointmentForm.date_of_birth,
+      gender: appointmentForm.gender
+    };
+
+    const patientResponse = await fetch('http://localhost:5002/api/patients', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patientPayload)
+    });
+
+    const patientData = await patientResponse.json();
+
+    if (!patientData.success) {
+      alert('❌ ' + (patientData.error || 'Erreur lors de la création du profil patient'));
+      return;
+    }
+
+    const patientId = patientData.patient.id;
+    const formattedDate = appointmentForm.appointment_date.replace('T', ' ');
+
+    const appointmentPayload = {
+      patient_id: patientId,
+      doctor_name: appointmentForm.doctor_name,
+      appointment_date: formattedDate,
+      duration: parseInt(appointmentForm.duration),
+      reason: appointmentForm.reason.trim(),
+      notes: appointmentForm.notes.trim(),
+      first_name: appointmentForm.first_name.trim(),
+      last_name: appointmentForm.last_name.trim(),
+      email: appointmentForm.email.trim().toLowerCase(),
+      phone: appointmentForm.phone.replace(/\s/g, '')
+    };
+
+    const response = await fetch('http://localhost:5003/api/appointments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(appointmentPayload)
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      alert('✅ Rendez-vous créé avec succès !');
+      setAppointmentForm({
+        doctor_name: appointmentForm.doctor_name,
+        appointment_date: '',
+        duration: 30,
+        reason: '',
+        notes: '',
+        first_name: '',
+        last_name: '',
+        email: '',
+        phone: '',
+        date_of_birth: '2000-01-01',
+        gender: 'Homme'
+      });
+    } else {
+      alert('❌ ' + (data.error || 'Erreur lors de la création du rendez-vous'));
+    }
+  } catch (error) {
+    console.error('Erreur:', error);
+    alert('❌ Erreur de connexion au serveur');
+  }
+};
 
   const services = [
     {
@@ -498,24 +548,28 @@ function ClinicLandingPage() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Email *</label>
                     <input
-                      type="email"
-                      name="email"
-                      value={appointmentForm.email}
-                      onChange={handleAppointmentChange}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      required
-                    />
+      type="email"
+      name="email"
+      value={appointmentForm.email}
+      onChange={handleAppointmentChange}
+      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+      placeholder="exemple@gmail.com"
+      required
+    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Téléphone *</label>
                     <input
-                      type="tel"
-                      name="phone"
-                      value={appointmentForm.phone}
-                      onChange={handleAppointmentChange}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      required
-                    />
+      type="tel"
+      name="phone"
+      value={appointmentForm.phone}
+      onChange={handleAppointmentChange}
+      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+      placeholder="0555123456"
+      pattern="[0-9]{10}"
+      maxLength="10"
+      required
+    />
                   </div>
                 </div>
 

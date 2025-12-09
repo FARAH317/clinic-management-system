@@ -1,0 +1,144 @@
+services:
+  # Base de données PostgreSQL
+  postgres:
+    image: postgres:15
+    container_name: medical_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: medical_system
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - medical_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  auth-service:
+    build:
+      context: ./src/backend/services/auth-service
+      dockerfile: Dockerfile
+    container_name: clinic-management-auth-service
+    ports:
+    -   "5001:5001"
+    depends_on:
+       postgres:
+          condition: service_healthy
+    environment:
+    -  FLASK_ENV=production
+    -  DATABASE_URL=postgresql://postgres:postgres@postgres:5432/medical_system
+    networks:
+    -  medical_network
+
+  # Microservice Patient
+  patient-service:
+    build: ./src/backend/services/patient-service
+    container_name: patient_service
+    ports:
+      - "5002:5002"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/medical_system
+      PORT: 5002
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - medical_network
+
+  # Microservice Appointment
+  appointment-service:
+    build: ./src/backend/services/appointment-service
+    container_name: appointment_service
+    ports:
+      - "5003:5003"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/medical_system
+      PORT: 5003
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - medical_network
+
+  # Microservice Prescription
+  prescription-service:
+    build: ./src/backend/services/prescription-service
+    container_name: prescription_service
+    ports:
+      - "5004:5004"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/medical_system
+      PORT: 5004
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - medical_network
+
+  # Microservice Medicine
+  medicine-service:
+    build: ./src/backend/services/medicine-service
+    container_name: medicine_service
+    ports:
+      - "5005:5005"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/medical_system
+      PORT: 5005
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - medical_network
+
+  # Microservice Doctor
+  doctor-service:
+    build: ./src/backend/services/doctor-service
+    container_name: doctor_service
+    ports:
+      - "5006:5006"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/medical_system
+      PORT: 5006
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - medical_network
+
+  # Frontend Dashboard
+  dashboard:
+    build: ./src/frontend
+    container_name: medical_dashboard
+    ports:
+      - "3000:3000"
+    environment:
+      REACT_APP_PATIENT_API: http://localhost:5002/api
+      REACT_APP_APPOINTMENT_API: http://localhost:5003/api
+      REACT_APP_PRESCRIPTION_API: http://localhost:5004/api
+      REACT_APP_MEDICINE_API: http://localhost:5005/api
+      REACT_APP_DOCTOR_API: http://localhost:5006/api
+    depends_on:
+      patient-service:
+        condition: service_started
+      appointment-service:
+        condition: service_started
+      prescription-service:
+        condition: service_started
+      medicine-service:
+        condition: service_started
+      doctor-service:
+        condition: service_started
+    networks:
+      - medical_network
+
+volumes:
+  postgres_data:
+
+networks:
+  medical_network:
+    driver: bridge

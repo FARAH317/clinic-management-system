@@ -15,30 +15,36 @@ function AdminLogin() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setError('');
 
-    try {
-      const response = await fetch('http://localhost:5001/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: formData.email, password: formData.password })
-      });
+  try {
+    const response = await fetch('http://127.0.0.1:5001/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: formData.email,   // 🔥 ici le backend attend "username" !
+        password: formData.password
+      }),
+    });
 
-      const data = await response.json();
+    const data = await response.json();
+    console.log(data);
 
-      if (data.success && data.user.role === 'admin') {
-        setUser(data.user);
-        navigate('/admin'); // redirige vers le dashboard
-      } else {
-        setError('Identifiants admin incorrects ou vous n\'avez pas accès');
-      }
-    } catch (err) {
-      console.error(err);
-      setError('Erreur de connexion au serveur');
+    if (response.ok && data.user?.role === 'admin') {
+      setUser(data.user);
+      navigate('/admin');
+    } else {
+      setError(data.error || 'Identifiants incorrects ou accès refusé');
     }
-  };
+  } catch (err) {
+    console.error(err);
+    setError('Erreur de connexion au serveur');
+  }
+};
+
+
 
   return (
     <div className="max-w-sm mx-auto mt-20 p-6 border rounded shadow">

@@ -10,6 +10,8 @@ const API_URLS = {
   doctor: 'http://localhost:5006/api'
 };
 
+
+
 export default function AdminDashboard() {
   const [stats, setStats] = useState({
     totalPatients: 0,
@@ -34,7 +36,24 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [searchTerm, setSearchTerm] = useState('');
-
+  const [showAddPrescriptionModal, setShowAddPrescriptionModal] = useState(false);
+  const [newPrescription, setNewPrescription] = useState({
+  patient_id: '',
+  doctor_id: '',
+  diagnosis: '',
+  notes: '',
+  valid_until: '',
+  medications: []
+  });
+  const [newMedication, setNewMedication] = useState({
+  medicine_id: '',
+  medicine_name: '',
+  dosage: '',
+  frequency: '',
+  duration: '',
+  quantity: '',
+  instructions: ''
+  });
   useEffect(() => {
     if (activeTab === 'dashboard') {
       fetchDashboardData();
@@ -347,7 +366,96 @@ Signature: ${prescription.doctor_name}
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
+  const handleAddPrescription = async () => {
+  try {
+    if (!newPrescription.patient_id || !newPrescription.doctor_id || !newPrescription.diagnosis) {
+      alert('Veuillez remplir tous les champs obligatoires');
+      return;
+    }
 
+    if (newPrescription.medications.length === 0) {
+      alert('Veuillez ajouter au moins un médicament');
+      return;
+    }
+
+    // Trouver le nom du médecin sélectionné
+const selectedDoctor = doctors.find(d => d.id === parseInt(newPrescription.doctor_id));
+const doctorName = selectedDoctor ? `${selectedDoctor.first_name} ${selectedDoctor.last_name}` : '';
+
+const prescriptionData = {
+  ...newPrescription,
+  doctor_name: doctorName,
+  prescription_date: new Date().toISOString(),
+  status: 'active'
+};
+
+    const response = await fetch(`${API_URLS.prescription}/prescriptions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(prescriptionData)
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      alert('Ordonnance créée avec succès!');
+      setShowAddPrescriptionModal(false);
+      setNewPrescription({
+        patient_id: '',
+        doctor_id: '',
+        diagnosis: '',
+        notes: '',
+        valid_until: '',
+        medications: []
+      });
+      fetchPrescriptions();
+      if (activeTab === 'dashboard') fetchDashboardData();
+    } else {
+      alert('Erreur: ' + (result.error || 'Impossible de créer l\'ordonnance'));
+    }
+  } catch (error) {
+    console.error('Erreur:', error);
+    alert('Erreur lors de la création de l\'ordonnance');
+  }
+};
+
+const addMedicationToPrescription = () => {
+  if (!newMedication.medicine_name || !newMedication.dosage || !newMedication.frequency) {
+    alert('Veuillez remplir tous les champs du médicament');
+    return;
+  }
+
+  setNewPrescription(prev => ({
+    ...prev,
+    medications: [...prev.medications, { ...newMedication }]
+  }));
+
+  setNewMedication({
+    medicine_id: '',
+    medicine_name: '',
+    dosage: '',
+    frequency: '',
+    duration: '',
+    quantity: '',
+    instructions: ''
+  });
+};
+
+const removeMedicationFromPrescription = (index) => {
+  setNewPrescription(prev => ({
+    ...prev,
+    medications: prev.medications.filter((_, i) => i !== index)
+  }));
+};
+const openAddPrescriptionModal = async () => {
+  setShowAddPrescriptionModal(true);
+  // Charger les données si elles ne sont pas déjà chargées
+  if (doctors.length === 0) await fetchDoctors();
+  if (medicines.length === 0) await fetchMedicines();
+  if (patients.length === 0) await fetchPatients();
+};
   const StatCard = ({ icon: Icon, title, value, color, bgColor }) => (
     <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
       <div className="flex items-center justify-between">
@@ -539,12 +647,13 @@ Signature: ${prescription.doctor_name}
       <div className="mb-6 flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-800">Gestion des Ordonnances</h2>
         <button
-          onClick={() => exportToCSV(prescriptions, 'ordonnances')}
-          className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-        >
-          <Download className="w-4 h-4 mr-2" />
-          Exporter CSV
-        </button>
+    onClick={openAddPrescriptionModal}
+    className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+  >
+    <FileText className="w-4 h-4 mr-2" />
+    Ajouter Ordonnance
+  </button>
+        
       </div>
 
       <div className="bg-white rounded-lg shadow-md p-4 mb-4">
@@ -961,6 +1070,251 @@ Signature: ${prescription.doctor_name}
           {activeTab === 'medicines' && renderMedicinesPage()}
         </>
       )}
+      {/* Modal Ajouter Ordonnance */}
+{showAddPrescriptionModal && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+    <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-800">Créer une Ordonnance</h2>
+          <button
+            onClick={() => setShowAddPrescriptionModal(false)}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            <span className="text-2xl">×</span>
+          </button>
+        </div>
+
+        <div className="space-y-6">
+          {/* Sélection Patient */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Patient *
+            </label>
+            <select
+              value={newPrescription.patient_id}
+              onChange={(e) => setNewPrescription({...newPrescription, patient_id: e.target.value})}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              required
+            >
+              <option value="">Sélectionner un patient</option>
+              {patients.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.first_name} {p.last_name} - {p.email}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Sélection Médecin */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Médecin *
+            </label>
+            <select
+              value={newPrescription.doctor_id}
+              onChange={(e) => setNewPrescription({...newPrescription, doctor_id: e.target.value})}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              required
+            >
+              <option value="">Sélectionner un médecin</option>
+              {doctors.map(d => (
+                <option key={d.id} value={d.id}>
+                  Dr. {d.first_name} {d.last_name} - {d.specialization}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Diagnostic */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Diagnostic *
+            </label>
+            <textarea
+              value={newPrescription.diagnosis}
+              onChange={(e) => setNewPrescription({...newPrescription, diagnosis: e.target.value})}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              rows="3"
+              required
+            />
+          </div>
+
+          {/* Date de validité */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Valide jusqu'au
+            </label>
+            <input
+              type="date"
+              value={newPrescription.valid_until}
+              onChange={(e) => setNewPrescription({...newPrescription, valid_until: e.target.value})}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Notes
+            </label>
+            <textarea
+              value={newPrescription.notes}
+              onChange={(e) => setNewPrescription({...newPrescription, notes: e.target.value})}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              rows="2"
+            />
+          </div>
+
+          {/* Ajouter Médicaments */}
+          <div className="border-t pt-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Médicaments</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Médicament *
+                </label>
+                <select
+                  value={newMedication.medicine_id}
+                  onChange={(e) => {
+                    const med = medicines.find(m => m.id === parseInt(e.target.value));
+                    setNewMedication({
+                      ...newMedication,
+                      medicine_id: e.target.value,
+                      medicine_name: med ? med.name : ''
+                    });
+                  }}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">Sélectionner un médicament</option>
+                  {medicines.map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.name} - {m.dosage_form}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Dosage *
+                </label>
+                <input
+                  type="text"
+                  value={newMedication.dosage}
+                  onChange={(e) => setNewMedication({...newMedication, dosage: e.target.value})}
+                  placeholder="ex: 500mg"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Fréquence *
+                </label>
+                <input
+                  type="text"
+                  value={newMedication.frequency}
+                  onChange={(e) => setNewMedication({...newMedication, frequency: e.target.value})}
+                  placeholder="ex: 3 fois par jour"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Durée
+                </label>
+                <input
+                  type="text"
+                  value={newMedication.duration}
+                  onChange={(e) => setNewMedication({...newMedication, duration: e.target.value})}
+                  placeholder="ex: 7 jours"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Quantité
+                </label>
+                <input
+                  type="number"
+                  value={newMedication.quantity}
+                  onChange={(e) => setNewMedication({...newMedication, quantity: e.target.value})}
+                  placeholder="ex: 21"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Instructions
+                </label>
+                <input
+                  type="text"
+                  value={newMedication.instructions}
+                  onChange={(e) => setNewMedication({...newMedication, instructions: e.target.value})}
+                  placeholder="ex: Prendre après les repas"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={addMedicationToPrescription}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+            >
+              Ajouter ce médicament
+            </button>
+
+            {/* Liste des médicaments ajoutés */}
+            {newPrescription.medications.length > 0 && (
+              <div className="mt-4">
+                <h4 className="font-medium text-gray-700 mb-2">Médicaments ajoutés:</h4>
+                <ul className="space-y-2">
+                  {newPrescription.medications.map((med, index) => (
+                    <li key={index} className="flex justify-between items-center bg-gray-50 p-3 rounded">
+                      <div>
+                        <p className="font-medium">{med.medicine_name}</p>
+                        <p className="text-sm text-gray-600">
+                          {med.dosage} - {med.frequency} - {med.duration}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => removeMedicationFromPrescription(index)}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        Supprimer
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          {/* Boutons d'action */}
+          <div className="flex justify-end gap-4 pt-6 border-t">
+            <button
+              onClick={() => setShowAddPrescriptionModal(false)}
+              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+            >
+              Annuler
+            </button>
+            <button
+              onClick={handleAddPrescription}
+              className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+            >
+              Créer l'ordonnance
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }

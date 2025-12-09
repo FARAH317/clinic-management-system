@@ -9,6 +9,7 @@ import requests
 app = Flask(__name__)
 CORS(app)
 
+
 # Configuration
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///prescriptions.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
