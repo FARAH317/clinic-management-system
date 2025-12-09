@@ -54,6 +54,63 @@ export default function AdminDashboard() {
   quantity: '',
   instructions: ''
   });
+  const [showAddPatientModal, setShowAddPatientModal] = useState(false);
+const [showAddDoctorModal, setShowAddDoctorModal] = useState(false);
+const [showEditPatientModal, setShowEditPatientModal] = useState(false);
+const [showEditDoctorModal, setShowEditDoctorModal] = useState(false);
+const [selectedPatient, setSelectedPatient] = useState(null);
+const [selectedDoctor, setSelectedDoctor] = useState(null);
+
+const [newPatient, setNewPatient] = useState({
+  first_name: '',
+  last_name: '',
+  email: '',
+  phone: '',
+  date_of_birth: '',
+  gender: 'Homme',
+  blood_group: '',
+  address: ''
+});
+
+const [newDoctor, setNewDoctor] = useState({
+  first_name: '',
+  last_name: '',
+  email: '',
+  phone: '',
+  specialization: '',
+  license_number: '',
+  years_of_experience: 0,
+  consultation_fee: 0
+});
+const [showAddAppointmentModal, setShowAddAppointmentModal] = useState(false);
+const [showEditAppointmentModal, setShowEditAppointmentModal] = useState(false);
+const [selectedAppointment, setSelectedAppointment] = useState(null);
+
+const [showAddMedicineModal, setShowAddMedicineModal] = useState(false);
+const [showEditMedicineModal, setShowEditMedicineModal] = useState(false);
+const [selectedMedicine, setSelectedMedicine] = useState(null);
+
+const [newAppointment, setNewAppointment] = useState({
+  patient_id: '',
+  doctor_id: '',
+  appointment_date: '',
+  appointment_time: '',
+  reason: '',
+  notes: ''
+});
+
+const [newMedicine, setNewMedicine] = useState({
+  name: '',
+  category: '',
+  manufacturer: '',
+  dosage_form: '',
+  strength: '',
+  stock_quantity: 0,
+  reorder_level: 10,
+  unit_price: 0,
+  expiry_date: '',
+  description: ''
+});
   useEffect(() => {
     if (activeTab === 'dashboard') {
       fetchDashboardData();
@@ -456,6 +513,509 @@ const openAddPrescriptionModal = async () => {
   if (medicines.length === 0) await fetchMedicines();
   if (patients.length === 0) await fetchPatients();
 };
+// === GESTION PATIENTS ===
+const handleAddPatient = async () => {
+  try {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const phoneRegex = /^[0-9]{10}$/;
+
+    if (!newPatient.first_name?.trim() || !newPatient.last_name?.trim()) {
+      alert('❌ Le prénom et le nom sont obligatoires');
+      return;
+    }
+    if (!emailRegex.test(newPatient.email)) {
+      alert('❌ Format d\'email invalide');
+      return;
+    }
+    if (!phoneRegex.test(newPatient.phone.replace(/\s/g, ''))) {
+      alert('❌ Le téléphone doit contenir 10 chiffres');
+      return;
+    }
+    if (!newPatient.date_of_birth) {
+      alert('❌ La date de naissance est obligatoire');
+      return;
+    }
+
+    const patientData = {
+      ...newPatient,
+      email: newPatient.email.toLowerCase().trim(),
+      phone: newPatient.phone.replace(/\s/g, ''),
+      first_name: newPatient.first_name.trim(),
+      last_name: newPatient.last_name.trim()
+    };
+
+    const response = await fetch(`${API_URLS.patient}/patients`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patientData)
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      alert('✅ Patient ajouté avec succès !');
+      setShowAddPatientModal(false);
+      setNewPatient({
+        first_name: '', last_name: '', email: '', phone: '',
+        date_of_birth: '', gender: 'Homme', blood_group: '', address: ''
+      });
+      fetchPatients();
+      if (activeTab === 'dashboard') fetchDashboardData();
+    } else {
+      alert('❌ ' + (result.error || 'Erreur lors de l\'ajout du patient'));
+    }
+  } catch (error) {
+    console.error('Erreur:', error);
+    alert('❌ Erreur de connexion au serveur');
+  }
+};
+
+const handleEditPatient = async () => {
+  try {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const phoneRegex = /^[0-9]{10}$/;
+
+    if (!selectedPatient.first_name?.trim() || !selectedPatient.last_name?.trim()) {
+      alert('❌ Le prénom et le nom sont obligatoires');
+      return;
+    }
+    if (!emailRegex.test(selectedPatient.email)) {
+      alert('❌ Format d\'email invalide');
+      return;
+    }
+    if (!phoneRegex.test(selectedPatient.phone.replace(/\s/g, ''))) {
+      alert('❌ Le téléphone doit contenir 10 chiffres');
+      return;
+    }
+
+    const patientData = {
+      ...selectedPatient,
+      email: selectedPatient.email.toLowerCase().trim(),
+      phone: selectedPatient.phone.replace(/\s/g, ''),
+      first_name: selectedPatient.first_name.trim(),
+      last_name: selectedPatient.last_name.trim()
+    };
+
+    const response = await fetch(`${API_URLS.patient}/patients/${selectedPatient.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patientData)
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      alert('✅ Patient modifié avec succès !');
+      setShowEditPatientModal(false);
+      setSelectedPatient(null);
+      fetchPatients();
+      if (activeTab === 'dashboard') fetchDashboardData();
+    } else {
+      alert('❌ ' + (result.error || 'Erreur lors de la modification'));
+    }
+  } catch (error) {
+    console.error('Erreur:', error);
+    alert('❌ Erreur de connexion au serveur');
+  }
+};
+
+const handleDeletePatient = async (patient) => {
+  if (!window.confirm(`⚠️ Êtes-vous sûr de vouloir supprimer le patient ${patient.first_name} ${patient.last_name} ?\n\nCette action est irréversible.`)) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_URLS.patient}/patients/${patient.id}`, {
+      method: 'DELETE'
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      alert('✅ Patient supprimé avec succès !');
+      fetchPatients();
+      if (activeTab === 'dashboard') fetchDashboardData();
+    } else {
+      alert('❌ ' + (result.error || 'Erreur lors de la suppression'));
+    }
+  } catch (error) {
+    console.error('Erreur:', error);
+    alert('❌ Erreur de connexion au serveur');
+  }
+};
+
+// === GESTION MÉDECINS ===
+const handleAddDoctor = async () => {
+  try {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const phoneRegex = /^[0-9]{10}$/;
+
+    if (!newDoctor.first_name?.trim() || !newDoctor.last_name?.trim()) {
+      alert('❌ Le prénom et le nom sont obligatoires');
+      return;
+    }
+    if (!emailRegex.test(newDoctor.email)) {
+      alert('❌ Format d\'email invalide');
+      return;
+    }
+    if (!phoneRegex.test(newDoctor.phone.replace(/\s/g, ''))) {
+      alert('❌ Le téléphone doit contenir 10 chiffres');
+      return;
+    }
+    if (!newDoctor.specialization?.trim()) {
+      alert('❌ La spécialisation est obligatoire');
+      return;
+    }
+
+    const doctorData = {
+      ...newDoctor,
+      email: newDoctor.email.toLowerCase().trim(),
+      phone: newDoctor.phone.replace(/\s/g, ''),
+      first_name: newDoctor.first_name.trim(),
+      last_name: newDoctor.last_name.trim(),
+      specialization: newDoctor.specialization.trim(),
+      years_of_experience: parseInt(newDoctor.years_of_experience) || 0,
+      consultation_fee: parseFloat(newDoctor.consultation_fee) || 0
+    };
+
+    const response = await fetch(`${API_URLS.doctor}/doctors`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(doctorData)
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      alert('✅ Médecin ajouté avec succès !');
+      setShowAddDoctorModal(false);
+      setNewDoctor({
+        first_name: '', last_name: '', email: '', phone: '',
+        specialization: '', license_number: '', years_of_experience: 0, consultation_fee: 0
+      });
+      fetchDoctors();
+      if (activeTab === 'dashboard') fetchDashboardData();
+    } else {
+      alert('❌ ' + (result.error || 'Erreur lors de l\'ajout du médecin'));
+    }
+  } catch (error) {
+    console.error('Erreur:', error);
+    alert('❌ Erreur de connexion au serveur');
+  }
+};
+
+const handleEditDoctor = async () => {
+  try {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const phoneRegex = /^[0-9]{10}$/;
+
+    if (!selectedDoctor.first_name?.trim() || !selectedDoctor.last_name?.trim()) {
+      alert('❌ Le prénom et le nom sont obligatoires');
+      return;
+    }
+    if (!emailRegex.test(selectedDoctor.email)) {
+      alert('❌ Format d\'email invalide');
+      return;
+    }
+    if (!phoneRegex.test(selectedDoctor.phone.replace(/\s/g, ''))) {
+      alert('❌ Le téléphone doit contenir 10 chiffres');
+      return;
+    }
+    if (!selectedDoctor.specialization?.trim()) {
+      alert('❌ La spécialisation est obligatoire');
+      return;
+    }
+
+    const doctorData = {
+      ...selectedDoctor,
+      email: selectedDoctor.email.toLowerCase().trim(),
+      phone: selectedDoctor.phone.replace(/\s/g, ''),
+      first_name: selectedDoctor.first_name.trim(),
+      last_name: selectedDoctor.last_name.trim(),
+      specialization: selectedDoctor.specialization.trim(),
+      years_of_experience: parseInt(selectedDoctor.years_of_experience) || 0,
+      consultation_fee: parseFloat(selectedDoctor.consultation_fee) || 0
+    };
+
+    const response = await fetch(`${API_URLS.doctor}/doctors/${selectedDoctor.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(doctorData)
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      alert('✅ Médecin modifié avec succès !');
+      setShowEditDoctorModal(false);
+      setSelectedDoctor(null);
+      fetchDoctors();
+      if (activeTab === 'dashboard') fetchDashboardData();
+    } else {
+      alert('❌ ' + (result.error || 'Erreur lors de la modification'));
+    }
+  } catch (error) {
+    console.error('Erreur:', error);
+    alert('❌ Erreur de connexion au serveur');
+  }
+};
+
+const handleDeleteDoctor = async (doctor) => {
+  if (!window.confirm(`⚠️ Êtes-vous sûr de vouloir supprimer le médecin Dr. ${doctor.first_name} ${doctor.last_name} ?\n\nCette action est irréversible.`)) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_URLS.doctor}/doctors/${doctor.id}`, {
+      method: 'DELETE'
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      alert('✅ Médecin supprimé avec succès !');
+      fetchDoctors();
+      if (activeTab === 'dashboard') fetchDashboardData();
+    } else {
+      alert('❌ ' + (result.error || 'Erreur lors de la suppression'));
+    }
+  } catch (error) {
+    console.error('Erreur:', error);
+    alert('❌ Erreur de connexion au serveur');
+  }
+};
+// === GESTION RENDEZ-VOUS ===
+const handleAddAppointment = async () => {
+  try {
+    if (!newAppointment.patient_id || !newAppointment.doctor_id || !newAppointment.appointment_date) {
+      alert('❌ Veuillez remplir tous les champs obligatoires');
+      return;
+    }
+
+    // Combiner date et heure
+    const appointmentDateTime = `${newAppointment.appointment_date}T${newAppointment.appointment_time || '09:00'}:00`;
+
+    const selectedDoctor = doctors.find(d => d.id === parseInt(newAppointment.doctor_id));
+    const doctorName = selectedDoctor ? `${selectedDoctor.first_name} ${selectedDoctor.last_name}` : '';
+
+    const appointmentData = {
+      patient_id: parseInt(newAppointment.patient_id),
+      doctor_id: parseInt(newAppointment.doctor_id),
+      doctor_name: doctorName,
+      appointment_date: appointmentDateTime,
+      reason: newAppointment.reason.trim(),
+      notes: newAppointment.notes.trim(),
+      status: 'scheduled'
+    };
+
+    const response = await fetch(`${API_URLS.appointment}/appointments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(appointmentData)
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      alert('✅ Rendez-vous créé avec succès !');
+      setShowAddAppointmentModal(false);
+      setNewAppointment({
+        patient_id: '', doctor_id: '', appointment_date: '',
+        appointment_time: '', reason: '', notes: ''
+      });
+      fetchAppointments();
+      if (activeTab === 'dashboard') fetchDashboardData();
+    } else {
+      alert('❌ ' + (result.error || 'Erreur lors de la création du rendez-vous'));
+    }
+  } catch (error) {
+    console.error('Erreur:', error);
+    alert('❌ Erreur de connexion au serveur');
+  }
+};
+
+const handleEditAppointment = async () => {
+  try {
+    if (!selectedAppointment.patient_id || !selectedAppointment.doctor_id || !selectedAppointment.appointment_date) {
+      alert('❌ Veuillez remplir tous les champs obligatoires');
+      return;
+    }
+
+    const appointmentData = {
+      patient_id: parseInt(selectedAppointment.patient_id),
+      doctor_id: parseInt(selectedAppointment.doctor_id),
+      appointment_date: selectedAppointment.appointment_date,
+      reason: selectedAppointment.reason?.trim() || '',
+      notes: selectedAppointment.notes?.trim() || '',
+      status: selectedAppointment.status || 'scheduled'
+    };
+
+    const response = await fetch(`${API_URLS.appointment}/appointments/${selectedAppointment.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(appointmentData)
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      alert('✅ Rendez-vous modifié avec succès !');
+      setShowEditAppointmentModal(false);
+      setSelectedAppointment(null);
+      fetchAppointments();
+      if (activeTab === 'dashboard') fetchDashboardData();
+    } else {
+      alert('❌ ' + (result.error || 'Erreur lors de la modification'));
+    }
+  } catch (error) {
+    console.error('Erreur:', error);
+    alert('❌ Erreur de connexion au serveur');
+  }
+};
+
+const handleDeleteAppointment = async (appointment) => {
+  if (!window.confirm(`⚠️ Êtes-vous sûr de vouloir supprimer ce rendez-vous ?\n\nCette action est irréversible.`)) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_URLS.appointment}/appointments/${appointment.id}`, {
+      method: 'DELETE'
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      alert('✅ Rendez-vous supprimé avec succès !');
+      fetchAppointments();
+      if (activeTab === 'dashboard') fetchDashboardData();
+    } else {
+      alert('❌ ' + (result.error || 'Erreur lors de la suppression'));
+    }
+  } catch (error) {
+    console.error('Erreur:', error);
+    alert('❌ Erreur de connexion au serveur');
+  }
+};
+
+const openAddAppointmentModal = async () => {
+  setShowAddAppointmentModal(true);
+  if (doctors.length === 0) await fetchDoctors();
+  if (patients.length === 0) await fetchPatients();
+};
+
+// === GESTION MÉDICAMENTS ===
+const handleAddMedicine = async () => {
+  try {
+    if (!newMedicine.name?.trim() || !newMedicine.category?.trim()) {
+      alert('❌ Le nom et la catégorie sont obligatoires');
+      return;
+    }
+
+    const medicineData = {
+      ...newMedicine,
+      name: newMedicine.name.trim(),
+      category: newMedicine.category.trim(),
+      manufacturer: newMedicine.manufacturer?.trim() || '',
+      dosage_form: newMedicine.dosage_form?.trim() || '',
+      strength: newMedicine.strength?.trim() || '',
+      stock_quantity: parseInt(newMedicine.stock_quantity) || 0,
+      reorder_level: parseInt(newMedicine.reorder_level) || 10,
+      unit_price: parseFloat(newMedicine.unit_price) || 0,
+      expiry_date: newMedicine.expiry_date || null,
+      description: newMedicine.description?.trim() || ''
+    };
+
+    const response = await fetch(`${API_URLS.medicine}/medicines`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(medicineData)
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      alert('✅ Médicament ajouté avec succès !');
+      setShowAddMedicineModal(false);
+      setNewMedicine({
+        name: '', category: '', manufacturer: '', dosage_form: '',
+        strength: '', stock_quantity: 0, reorder_level: 10,
+        unit_price: 0, expiry_date: '', description: ''
+      });
+      fetchMedicines();
+      if (activeTab === 'dashboard') fetchDashboardData();
+    } else {
+      alert('❌ ' + (result.error || 'Erreur lors de l\'ajout du médicament'));
+    }
+  } catch (error) {
+    console.error('Erreur:', error);
+    alert('❌ Erreur de connexion au serveur');
+  }
+};
+
+const handleEditMedicine = async () => {
+  try {
+    if (!selectedMedicine.name?.trim() || !selectedMedicine.category?.trim()) {
+      alert('❌ Le nom et la catégorie sont obligatoires');
+      return;
+    }
+
+    const medicineData = {
+      ...selectedMedicine,
+      name: selectedMedicine.name.trim(),
+      category: selectedMedicine.category.trim(),
+      stock_quantity: parseInt(selectedMedicine.stock_quantity) || 0,
+      reorder_level: parseInt(selectedMedicine.reorder_level) || 10,
+      unit_price: parseFloat(selectedMedicine.unit_price) || 0
+    };
+
+    const response = await fetch(`${API_URLS.medicine}/medicines/${selectedMedicine.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(medicineData)
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      alert('✅ Médicament modifié avec succès !');
+      setShowEditMedicineModal(false);
+      setSelectedMedicine(null);
+      fetchMedicines();
+      if (activeTab === 'dashboard') fetchDashboardData();
+    } else {
+      alert('❌ ' + (result.error || 'Erreur lors de la modification'));
+    }
+  } catch (error) {
+    console.error('Erreur:', error);
+    alert('❌ Erreur de connexion au serveur');
+  }
+};
+
+const handleDeleteMedicine = async (medicine) => {
+  if (!window.confirm(`⚠️ Êtes-vous sûr de vouloir supprimer le médicament "${medicine.name}" ?\n\nCette action est irréversible.`)) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_URLS.medicine}/medicines/${medicine.id}`, {
+      method: 'DELETE'
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      alert('✅ Médicament supprimé avec succès !');
+      fetchMedicines();
+      if (activeTab === 'dashboard') fetchDashboardData();
+    } else {
+      alert('❌ ' + (result.error || 'Erreur lors de la suppression'));
+    }
+  } catch (error) {
+    console.error('Erreur:', error);
+    alert('❌ Erreur de connexion au serveur');
+  }
+};
   const StatCard = ({ icon: Icon, title, value, color, bgColor }) => (
     <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
       <div className="flex items-center justify-between">
@@ -501,15 +1061,24 @@ const openAddPrescriptionModal = async () => {
   const renderPatientsPage = () => (
     <div>
       <div className="mb-6 flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-800">Gestion des Patients</h2>
-        <button
-          onClick={() => exportToCSV(patients, 'patients')}
-          className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-        >
-          <Download className="w-4 h-4 mr-2" />
-          Exporter CSV
-        </button>
-      </div>
+  <h2 className="text-2xl font-bold text-gray-800">Gestion des Patients</h2>
+  <div className="flex gap-2">
+    <button
+      onClick={() => setShowAddPatientModal(true)}
+      className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+    >
+      <Users className="w-4 h-4 mr-2" />
+      Ajouter Patient
+    </button>
+    <button
+      onClick={() => exportToCSV(patients, 'patients')}
+      className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+    >
+      <Download className="w-4 h-4 mr-2" />
+      Exporter CSV
+    </button>
+  </div>
+</div>
 
       <div className="bg-white rounded-lg shadow-md p-4 mb-4">
         <div className="relative">
@@ -534,6 +1103,7 @@ const openAddPrescriptionModal = async () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Genre</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Groupe Sanguin</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -566,6 +1136,25 @@ const openAddPrescriptionModal = async () => {
                   <td className="px-6 py-4 text-sm text-gray-500">
                     {new Date(patient.created_at).toLocaleDateString('fr-FR')}
                   </td>
+                  <td className="px-6 py-4 text-sm">
+  <div className="flex gap-2">
+    <button
+      onClick={() => {
+        setSelectedPatient(patient);
+        setShowEditPatientModal(true);
+      }}
+      className="px-3 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 transition"
+    >
+      Modifier
+    </button>
+    <button
+      onClick={() => handleDeletePatient(patient)}
+      className="px-3 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 transition"
+    >
+      Supprimer
+    </button>
+  </div>
+</td>
                 </tr>
               ))}
             </tbody>
@@ -576,9 +1165,17 @@ const openAddPrescriptionModal = async () => {
   );
 
   const renderAppointmentsPage = () => (
-    <div>
-      <div className="mb-6 flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-800">Gestion des Rendez-vous</h2>
+  <div>
+    <div className="mb-6 flex justify-between items-center">
+      <h2 className="text-2xl font-bold text-gray-800">Gestion des Rendez-vous</h2>
+      <div className="flex gap-2">
+        <button
+          onClick={openAddAppointmentModal}
+          className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+        >
+          <Calendar className="w-4 h-4 mr-2" />
+          Ajouter Rendez-vous
+        </button>
         <button
           onClick={() => exportToCSV(appointments, 'rendez-vous')}
           className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
@@ -587,60 +1184,81 @@ const openAddPrescriptionModal = async () => {
           Exporter CSV
         </button>
       </div>
+    </div>
 
-      <div className="bg-white rounded-lg shadow-md p-4 mb-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Rechercher un rendez-vous..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-          />
-        </div>
-      </div>
-
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Patient</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Médecin</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date & Heure</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Motif</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Statut</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredAppointments.map(apt => (
-                <tr key={apt.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm text-gray-900">
-                    {apt.patient?.name || `Patient #${apt.patient_id}`}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-900">{apt.doctor_name}</td>
-                  <td className="px-6 py-4 text-sm text-gray-900">
-                    {new Date(apt.appointment_date).toLocaleString('fr-FR')}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">{apt.reason || 'N/A'}</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
-                      apt.status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
-                      apt.status === 'completed' ? 'bg-green-100 text-green-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {apt.status === 'scheduled' ? 'Planifié' : apt.status === 'completed' ? 'Terminé' : apt.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+    <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+      <div className="relative">
+        <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+        <input
+          type="text"
+          placeholder="Rechercher un rendez-vous..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+        />
       </div>
     </div>
-  );
+
+    <div className="bg-white rounded-lg shadow-md overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Patient</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Médecin</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date & Heure</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Motif</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Statut</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {filteredAppointments.map(apt => (
+              <tr key={apt.id} className="hover:bg-gray-50">
+                <td className="px-6 py-4 text-sm text-gray-900">
+                  {apt.patient?.name || `Patient #${apt.patient_id}`}
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-900">{apt.doctor_name}</td>
+                <td className="px-6 py-4 text-sm text-gray-900">
+                  {new Date(apt.appointment_date).toLocaleString('fr-FR')}
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-500">{apt.reason || 'N/A'}</td>
+                <td className="px-6 py-4">
+                  <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                    apt.status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
+                    apt.status === 'completed' ? 'bg-green-100 text-green-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {apt.status === 'scheduled' ? 'Planifié' : apt.status === 'completed' ? 'Terminé' : apt.status}
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-sm">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setSelectedAppointment(apt);
+                        setShowEditAppointmentModal(true);
+                      }}
+                      className="px-3 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 transition"
+                    >
+                      Modifier
+                    </button>
+                    <button
+                      onClick={() => handleDeleteAppointment(apt)}
+                      className="px-3 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 transition"
+                    >
+                      Supprimer
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+);
 
   const renderPrescriptionsPage = () => (
     <div>
@@ -722,10 +1340,18 @@ const openAddPrescriptionModal = async () => {
     </div>
   );
 
-  const renderMedicinesPage = () => (
-    <div>
-      <div className="mb-6 flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-800">Gestion des Médicaments</h2>
+ const renderMedicinesPage = () => (
+  <div>
+    <div className="mb-6 flex justify-between items-center">
+      <h2 className="text-2xl font-bold text-gray-800">Gestion des Médicaments</h2>
+      <div className="flex gap-2">
+        <button
+          onClick={() => setShowAddMedicineModal(true)}
+          className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+        >
+          <Pill className="w-4 h-4 mr-2" />
+          Ajouter Médicament
+        </button>
         <button
           onClick={() => exportToCSV(medicines, 'medicaments')}
           className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
@@ -734,75 +1360,105 @@ const openAddPrescriptionModal = async () => {
           Exporter CSV
         </button>
       </div>
+    </div>
 
-      <div className="bg-white rounded-lg shadow-md p-4 mb-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Rechercher un médicament..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-          />
-        </div>
-      </div>
-
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Médicament</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Catégorie</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Forme</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stock</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Prix</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Statut</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredMedicines.map(med => (
-                <tr key={med.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4">
-                    <div className="text-sm font-medium text-gray-900">{med.name}</div>
-                    <div className="text-sm text-gray-500">{med.manufacturer || 'N/A'}</div>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-900">{med.category}</td>
-                  <td className="px-6 py-4 text-sm text-gray-900">{med.dosage_form}</td>
-                  <td className="px-6 py-4 text-sm text-gray-900">{med.stock_quantity}</td>
-                  <td className="px-6 py-4 text-sm text-gray-900">{med.unit_price}€</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
-                      med.stock_status === 'in_stock' ? 'bg-green-100 text-green-800' :
-                      med.stock_status === 'low_stock' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-red-100 text-red-800'
-                    }`}>
-                      {med.stock_status === 'in_stock' ? 'En stock' :
-                       med.stock_status === 'low_stock' ? 'Stock faible' : 'Rupture'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+    <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+      <div className="relative">
+        <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+        <input
+          type="text"
+          placeholder="Rechercher un médicament..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+        />
       </div>
     </div>
-  );
+
+    <div className="bg-white rounded-lg shadow-md overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Médicament</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Catégorie</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Forme</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stock</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Prix</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Statut</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {filteredMedicines.map(med => (
+              <tr key={med.id} className="hover:bg-gray-50">
+                <td className="px-6 py-4">
+                  <div className="text-sm font-medium text-gray-900">{med.name}</div>
+                  <div className="text-sm text-gray-500">{med.manufacturer || 'N/A'}</div>
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-900">{med.category}</td>
+                <td className="px-6 py-4 text-sm text-gray-900">{med.dosage_form}</td>
+                <td className="px-6 py-4 text-sm text-gray-900">{med.stock_quantity}</td>
+                <td className="px-6 py-4 text-sm text-gray-900">{med.unit_price}€</td>
+                <td className="px-6 py-4">
+                  <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                    med.stock_status === 'in_stock' ? 'bg-green-100 text-green-800' :
+                    med.stock_status === 'low_stock' ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-red-100 text-red-800'
+                  }`}>
+                    {med.stock_status === 'in_stock' ? 'En stock' :
+                     med.stock_status === 'low_stock' ? 'Stock faible' : 'Rupture'}
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-sm">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setSelectedMedicine(med);
+                        setShowEditMedicineModal(true);
+                      }}
+                      className="px-3 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 transition"
+                    >
+                      Modifier
+                    </button>
+                    <button
+                      onClick={() => handleDeleteMedicine(med)}
+                      className="px-3 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 transition"
+                    >
+                      Supprimer
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+);
 
   const renderDoctorsPage = () => (
     <div>
       <div className="mb-6 flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-800">Gestion des Médecins</h2>
-        <button
-          onClick={() => exportToCSV(doctors, 'medecins')}
-          className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-        >
-          <Download className="w-4 h-4 mr-2" />
-          Exporter CSV
-        </button>
-      </div>
+  <h2 className="text-2xl font-bold text-gray-800">Gestion des Médecins</h2>
+  <div className="flex gap-2">
+    <button
+      onClick={() => setShowAddDoctorModal(true)}
+      className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+    >
+      <UserCheck className="w-4 h-4 mr-2" />
+      Ajouter Médecin
+    </button>
+    <button
+      onClick={() => exportToCSV(doctors, 'medecins')}
+      className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+    >
+      <Download className="w-4 h-4 mr-2" />
+      Exporter CSV
+    </button>
+  </div>
+</div>
 
       <div className="bg-white rounded-lg shadow-md p-4 mb-4">
         <div className="relative">
@@ -828,6 +1484,7 @@ const openAddPrescriptionModal = async () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Licence</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Statut</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -865,6 +1522,25 @@ const openAddPrescriptionModal = async () => {
                   <td className="px-6 py-4 text-sm text-gray-500">
                     {new Date(doctor.created_at).toLocaleDateString('fr-FR')}
                   </td>
+                  <td className="px-6 py-4 text-sm">
+  <div className="flex gap-2">
+    <button
+      onClick={() => {
+        setSelectedDoctor(doctor);
+        setShowEditDoctorModal(true);
+      }}
+      className="px-3 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 transition"
+    >
+      Modifier
+    </button>
+    <button
+      onClick={() => handleDeleteDoctor(doctor)}
+      className="px-3 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 transition"
+    >
+      Supprimer
+    </button>
+  </div>
+</td>
                 </tr>
               ))}
             </tbody>
@@ -1315,6 +1991,707 @@ const openAddPrescriptionModal = async () => {
     </div>
   </div>
 )}
+{/* Modal Ajouter Patient */}
+{showAddPatientModal && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-800">Ajouter un Patient</h2>
+          <button onClick={() => setShowAddPatientModal(false)} className="text-gray-500 hover:text-gray-700">
+            <span className="text-2xl">×</span>
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Prénom *</label>
+              <input type="text" value={newPatient.first_name} onChange={(e) => setNewPatient({...newPatient, first_name: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Nom *</label>
+              <input type="text" value={newPatient.last_name} onChange={(e) => setNewPatient({...newPatient, last_name: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Email *</label>
+              <input type="email" value={newPatient.email} onChange={(e) => setNewPatient({...newPatient, email: e.target.value})}
+                placeholder="exemple@gmail.com" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Téléphone *</label>
+              <input type="tel" value={newPatient.phone} onChange={(e) => setNewPatient({...newPatient, phone: e.target.value})}
+                placeholder="0555123456" maxLength="10" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Date de naissance *</label>
+              <input type="date" value={newPatient.date_of_birth} onChange={(e) => setNewPatient({...newPatient, date_of_birth: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Genre *</label>
+              <select value={newPatient.gender} onChange={(e) => setNewPatient({...newPatient, gender: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required>
+                <option value="Homme">Homme</option>
+                <option value="Femme">Femme</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Groupe sanguin</label>
+            <input type="text" value={newPatient.blood_group} onChange={(e) => setNewPatient({...newPatient, blood_group: e.target.value})}
+              placeholder="A+, O-, etc." className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Adresse</label>
+            <textarea value={newPatient.address} onChange={(e) => setNewPatient({...newPatient, address: e.target.value})}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" rows="2" />
+          </div>
+
+          <div className="flex justify-end gap-4 pt-4">
+            <button onClick={() => setShowAddPatientModal(false)}
+              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">
+              Annuler
+            </button>
+            <button onClick={handleAddPatient}
+              className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+              Ajouter
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
+{/* Modal Modifier Patient */}
+{showEditPatientModal && selectedPatient && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-800">Modifier le Patient</h2>
+          <button onClick={() => {setShowEditPatientModal(false); setSelectedPatient(null);}} className="text-gray-500 hover:text-gray-700">
+            <span className="text-2xl">×</span>
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Prénom *</label>
+              <input type="text" value={selectedPatient.first_name} onChange={(e) => setSelectedPatient({...selectedPatient, first_name: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Nom *</label>
+              <input type="text" value={selectedPatient.last_name} onChange={(e) => setSelectedPatient({...selectedPatient, last_name: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Email *</label>
+              <input type="email" value={selectedPatient.email} onChange={(e) => setSelectedPatient({...selectedPatient, email: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Téléphone *</label>
+              <input type="tel" value={selectedPatient.phone} onChange={(e) => setSelectedPatient({...selectedPatient, phone: e.target.value})}
+                maxLength="10" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Date de naissance *</label>
+              <input type="date" value={selectedPatient.date_of_birth?.split('T')[0]} onChange={(e) => setSelectedPatient({...selectedPatient, date_of_birth: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Genre *</label>
+              <select value={selectedPatient.gender} onChange={(e) => setSelectedPatient({...selectedPatient, gender: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required>
+                <option value="Homme">Homme</option>
+                <option value="Femme">Femme</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Groupe sanguin</label>
+            <input type="text" value={selectedPatient.blood_group || ''} onChange={(e) => setSelectedPatient({...selectedPatient, blood_group: e.target.value})}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Adresse</label>
+            <textarea value={selectedPatient.address || ''} onChange={(e) => setSelectedPatient({...selectedPatient, address: e.target.value})}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" rows="2" />
+          </div>
+
+          <div className="flex justify-end gap-4 pt-4">
+            <button onClick={() => {setShowEditPatientModal(false); setSelectedPatient(null);}}
+              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">
+              Annuler
+            </button>
+            <button onClick={handleEditPatient}
+              className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+              Modifier
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
+{/* Modal Ajouter Médecin */}
+{showAddDoctorModal && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-800">Ajouter un Médecin</h2>
+          <button onClick={() => setShowAddDoctorModal(false)} className="text-gray-500 hover:text-gray-700">
+            <span className="text-2xl">×</span>
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Prénom *</label>
+              <input type="text" value={newDoctor.first_name} onChange={(e) => setNewDoctor({...newDoctor, first_name: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Nom *</label>
+              <input type="text" value={newDoctor.last_name} onChange={(e) => setNewDoctor({...newDoctor, last_name: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Email *</label>
+              <input type="email" value={newDoctor.email} onChange={(e) => setNewDoctor({...newDoctor, email: e.target.value})}
+                placeholder="exemple@gmail.com" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Téléphone *</label>
+              <input type="tel" value={newDoctor.phone} onChange={(e) => setNewDoctor({...newDoctor, phone: e.target.value})}
+                placeholder="0555123456" maxLength="10" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Spécialisation *</label>
+            <input type="text" value={newDoctor.specialization} 
+            onChange={(e) => setNewDoctor({...newDoctor, specialization: e.target.value})}
+placeholder="Cardiologue, Pédiatre, etc." className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+</div>
+<div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Numéro de licence</label>
+          <input type="text" value={newDoctor.license_number} onChange={(e) => setNewDoctor({...newDoctor, license_number: e.target.value})}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Années d'expérience</label>
+          <input type="number" value={newDoctor.years_of_experience} onChange={(e) => setNewDoctor({...newDoctor, years_of_experience: e.target.value})}
+            min="0" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Frais de consultation (€)</label>
+        <input type="number" value={newDoctor.consultation_fee} onChange={(e) => setNewDoctor({...newDoctor, consultation_fee: e.target.value})}
+          min="0" step="0.01" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+      </div>
+
+      <div className="flex justify-end gap-4 pt-4">
+        <button onClick={() => setShowAddDoctorModal(false)}
+          className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">
+          Annuler
+        </button>
+        <button onClick={handleAddDoctor}
+          className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+          Ajouter
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+)}
+{/* Modal Modifier Médecin */}
+{showEditDoctorModal && selectedDoctor && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-800">Modifier le Médecin</h2>
+          <button onClick={() => {setShowEditDoctorModal(false); setSelectedDoctor(null);}} className="text-gray-500 hover:text-gray-700">
+            <span className="text-2xl">×</span>
+          </button>
+        </div>
+        <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Prénom *</label>
+          <input type="text" value={selectedDoctor.first_name} onChange={(e) => setSelectedDoctor({...selectedDoctor, first_name: e.target.value})}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Nom *</label>
+          <input type="text" value={selectedDoctor.last_name} onChange={(e) => setSelectedDoctor({...selectedDoctor, last_name: e.target.value})}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Email *</label>
+          <input type="email" value={selectedDoctor.email} onChange={(e) => setSelectedDoctor({...selectedDoctor, email: e.target.value})}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Téléphone *</label>
+          <input type="tel" value={selectedDoctor.phone} onChange={(e) => setSelectedDoctor({...selectedDoctor, phone: e.target.value})}
+            maxLength="10" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Spécialisation *</label>
+        <input type="text" value={selectedDoctor.specialization} onChange={(e) => setSelectedDoctor({...selectedDoctor, specialization: e.target.value})}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Numéro de licence</label>
+          <input type="text" value={selectedDoctor.license_number || ''} onChange={(e) => setSelectedDoctor({...selectedDoctor, license_number: e.target.value})}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Années d'expérience</label>
+          <input type="number" value={selectedDoctor.years_of_experience} onChange={(e) => setSelectedDoctor({...selectedDoctor, years_of_experience: e.target.value})}
+            min="0" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Frais de consultation (€)</label>
+        <input type="number" value={selectedDoctor.consultation_fee} onChange={(e) => setSelectedDoctor({...selectedDoctor, consultation_fee: e.target.value})}
+          min="0" step="0.01" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+      </div>
+
+      <div className="flex justify-end gap-4 pt-4">
+        <button onClick={() => {setShowEditDoctorModal(false); setSelectedDoctor(null);}}
+          className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">
+          Annuler
+        </button>
+        <button onClick={handleEditDoctor}
+          className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+          Modifier
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+)}
+{/* Modal Ajouter Rendez-vous */}
+{showAddAppointmentModal && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-800">Ajouter un Rendez-vous</h2>
+          <button onClick={() => setShowAddAppointmentModal(false)} className="text-gray-500 hover:text-gray-700">
+            <span className="text-2xl">×</span>
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Patient *</label>
+            <select value={newAppointment.patient_id} onChange={(e) => setNewAppointment({...newAppointment, patient_id: e.target.value})}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required>
+              <option value="">Sélectionner un patient</option>
+              {patients.map(p => (
+                <option key={p.id} value={p.id}>{p.first_name} {p.last_name} - {p.email}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Médecin *</label>
+            <select value={newAppointment.doctor_id} onChange={(e) => setNewAppointment({...newAppointment, doctor_id: e.target.value})}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required>
+              <option value="">Sélectionner un médecin</option>
+              {doctors.map(d => (
+                <option key={d.id} value={d.id}>Dr. {d.first_name} {d.last_name} - {d.specialization}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Date *</label>
+              <input type="date" value={newAppointment.appointment_date} 
+                onChange={(e) => setNewAppointment({...newAppointment, appointment_date: e.target.value})}
+                min={new Date().toISOString().split('T')[0]}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Heure *</label>
+              <input type="time" value={newAppointment.appointment_time} 
+                onChange={(e) => setNewAppointment({...newAppointment, appointment_time: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Motif *</label>
+            <input type="text" value={newAppointment.reason} 
+              onChange={(e) => setNewAppointment({...newAppointment, reason: e.target.value})}
+              placeholder="Consultation générale, suivi, etc."
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
+            <textarea value={newAppointment.notes} 
+              onChange={(e) => setNewAppointment({...newAppointment, notes: e.target.value})}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" rows="3" />
+          </div>
+
+          <div className="flex justify-end gap-4 pt-4">
+            <button onClick={() => setShowAddAppointmentModal(false)}
+              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">
+              Annuler
+            </button>
+            <button onClick={handleAddAppointment}
+              className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+              Créer
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
+{/* Modal Modifier Rendez-vous */}
+{showEditAppointmentModal && selectedAppointment && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-800">Modifier le Rendez-vous</h2>
+          <button onClick={() => {setShowEditAppointmentModal(false); setSelectedAppointment(null);}} 
+            className="text-gray-500 hover:text-gray-700">
+            <span className="text-2xl">×</span>
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Patient *</label>
+            <select value={selectedAppointment.patient_id} 
+              onChange={(e) => setSelectedAppointment({...selectedAppointment, patient_id: e.target.value})}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required>
+              <option value="">Sélectionner un patient</option>
+              {patients.map(p => (
+                <option key={p.id} value={p.id}>{p.first_name} {p.last_name} - {p.email}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Médecin *</label>
+            <select value={selectedAppointment.doctor_id} 
+              onChange={(e) => setSelectedAppointment({...selectedAppointment, doctor_id: e.target.value})}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required>
+              <option value="">Sélectionner un médecin</option>
+              {doctors.map(d => (
+                <option key={d.id} value={d.id}>Dr. {d.first_name} {d.last_name} - {d.specialization}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Date & Heure *</label>
+            <input type="datetime-local" 
+              value={selectedAppointment.appointment_date ? new Date(selectedAppointment.appointment_date).toISOString().slice(0, 16) : ''}
+              onChange={(e) => setSelectedAppointment({...selectedAppointment, appointment_date: e.target.value})}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Motif *</label>
+            <input type="text" value={selectedAppointment.reason || ''} 
+              onChange={(e) => setSelectedAppointment({...selectedAppointment, reason: e.target.value})}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Statut</label>
+            <select value={selectedAppointment.status || 'scheduled'} 
+              onChange={(e) => setSelectedAppointment({...selectedAppointment, status: e.target.value})}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+              <option value="scheduled">Planifié</option>
+              <option value="completed">Terminé</option>
+              <option value="cancelled">Annulé</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
+            <textarea value={selectedAppointment.notes || ''} 
+              onChange={(e) => setSelectedAppointment({...selectedAppointment, notes: e.target.value})}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" rows="3" />
+          </div>
+
+          <div className="flex justify-end gap-4 pt-4">
+            <button onClick={() => {setShowEditAppointmentModal(false); setSelectedAppointment(null);}}
+              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">
+              Annuler
+            </button>
+            <button onClick={handleEditAppointment}
+              className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+              Modifier
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
+{/* Modal Ajouter Médicament */}
+{showAddMedicineModal && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-800">Ajouter un Médicament</h2>
+          <button onClick={() => setShowAddMedicineModal(false)} className="text-gray-500 hover:text-gray-700">
+            <span className="text-2xl">×</span>
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Nom *</label>
+              <input type="text" value={newMedicine.name} 
+                onChange={(e) => setNewMedicine({...newMedicine, name: e.target.value})}
+                placeholder="Paracétamol, Aspirine, etc."
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Catégorie *</label>
+              <input type="text" value={newMedicine.category} 
+                onChange={(e) => setNewMedicine({...newMedicine, category: e.target.value})}
+                placeholder="Analgésique, Antibiotique, etc."
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Fabricant</label>
+              <input type="text" value={newMedicine.manufacturer} 
+                onChange={(e) => setNewMedicine({...newMedicine, manufacturer: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Forme</label>
+              <input type="text" value={newMedicine.dosage_form} 
+                onChange={(e) => setNewMedicine({...newMedicine, dosage_form: e.target.value})}
+                placeholder="Comprimé, Gélule, Sirop, etc."
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Dosage</label>
+              <input type="text" value={newMedicine.strength} 
+                onChange={(e) => setNewMedicine({...newMedicine, strength: e.target.value})}
+                placeholder="500mg, 10ml, etc."
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Stock</label>
+              <input type="number" value={newMedicine.stock_quantity} 
+                onChange={(e) => setNewMedicine({...newMedicine, stock_quantity: e.target.value})}
+                min="0" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Seuil d'alerte</label>
+              <input type="number" value={newMedicine.reorder_level} 
+                onChange={(e) => setNewMedicine({...newMedicine, reorder_level: e.target.value})}
+                min="0" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Prix unitaire (€)</label>
+              <input type="number" value={newMedicine.unit_price} 
+                onChange={(e) => setNewMedicine({...newMedicine, unit_price: e.target.value})}
+                min="0" step="0.01" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Date d'expiration</label>
+              <input type="date" value={newMedicine.expiry_date} 
+                onChange={(e) => setNewMedicine({...newMedicine, expiry_date: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+            <textarea value={newMedicine.description} 
+              onChange={(e) => setNewMedicine({...newMedicine, description: e.target.value})}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" rows="3" />
+          </div>
+
+          <div className="flex justify-end gap-4 pt-4">
+            <button onClick={() => setShowAddMedicineModal(false)}
+              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">
+              Annuler
+            </button>
+            <button onClick={handleAddMedicine}
+              className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+              Ajouter
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
+{/* Modal Modifier Médicament */}
+{showEditMedicineModal && selectedMedicine && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-800">Modifier le Médicament</h2>
+          <button onClick={() => {setShowEditMedicineModal(false); setSelectedMedicine(null);}} 
+            className="text-gray-500 hover:text-gray-700">
+            <span className="text-2xl">×</span>
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Nom *</label>
+              <input type="text" value={selectedMedicine.name} 
+                onChange={(e) => setSelectedMedicine({...selectedMedicine, name: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Catégorie *</label>
+              <input type="text" value={selectedMedicine.category} 
+                onChange={(e) => setSelectedMedicine({...selectedMedicine, category: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Fabricant</label>
+              <input type="text" value={selectedMedicine.manufacturer || ''} 
+                onChange={(e) => setSelectedMedicine({...selectedMedicine, manufacturer: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Forme</label>
+              <input type="text" value={selectedMedicine.dosage_form || ''} 
+                onChange={(e) => setSelectedMedicine({...selectedMedicine, dosage_form: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Dosage</label>
+              <input type="text" value={selectedMedicine.strength || ''} 
+                onChange={(e) => setSelectedMedicine({...selectedMedicine, strength: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Stock</label>
+              <input type="number" value={selectedMedicine.stock_quantity} 
+                onChange={(e) => setSelectedMedicine({...selectedMedicine, stock_quantity: e.target.value})}
+                min="0" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Seuil d'alerte</label>
+              <input type="number" value={selectedMedicine.reorder_level} 
+                onChange={(e) => setSelectedMedicine({...selectedMedicine, reorder_level: e.target.value})}
+                min="0" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Prix unitaire (€)</label>
+              <input type="number" value={selectedMedicine.unit_price} 
+                onChange={(e) => setSelectedMedicine({...selectedMedicine, unit_price: e.target.value})}
+                min="0" step="0.01" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Date d'expiration</label>
+              <input type="date" value={selectedMedicine.expiry_date?.split('T')[0] || ''} 
+                onChange={(e) => setSelectedMedicine({...selectedMedicine, expiry_date: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+            <textarea value={selectedMedicine.description || ''} 
+              onChange={(e) => setSelectedMedicine({...selectedMedicine, description: e.target.value})}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" rows="3" />
+          </div>
+
+          <div className="flex justify-end gap-4 pt-4">
+            <button onClick={() => {setShowEditMedicineModal(false); setSelectedMedicine(null);}}
+              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">
+              Annuler
+            </button>
+            <button onClick={handleEditMedicine}
+              className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+              Modifier
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
     </div>
   );
 }
