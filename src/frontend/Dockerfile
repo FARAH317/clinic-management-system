@@ -3,12 +3,16 @@ FROM node:20
 
 WORKDIR /app
 
-# Copier package.json et package-lock.json
+# Copier les fichiers de dépendances
 COPY package.json package-lock.json ./
 
-RUN npm install
+# Utiliser le registre officiel NPM (évite ECONNRESET)
+RUN npm config set registry https://registry.npmjs.org/
 
-# Copier tout le code source
+# Installer les dépendances de manière fiable
+RUN npm ci --legacy-peer-deps
+
+# Copier le reste du code
 COPY . .
 
 EXPOSE 3000

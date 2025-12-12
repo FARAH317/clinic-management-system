@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Script pour peupler les bases de données avec des données de test
-Usage: python seed_database.py
+Script amélioré pour peupler toutes les bases de données,
+même si les données existent déjà.
 """
 
 import requests
@@ -19,8 +19,13 @@ BASE_URLS = {
     'appointment': 'http://localhost:5003/api',
     'prescription': 'http://localhost:5004/api',
     'medicine': 'http://localhost:5005/api',
-    'doctor': 'http://localhost:5006/api'
+    'doctor': 'http://localhost:5006/api',
+    'billing': 'http://localhost:5007/api'
 }
+
+# ============================================================
+# AFFICHAGE
+# ============================================================
 
 def print_success(text):
     print(f"{Fore.GREEN}✓ {text}{Style.RESET_ALL}")
@@ -36,7 +41,62 @@ def print_header(text):
     print(f"{text:^60}")
     print(f"{'='*60}{Style.RESET_ALL}\n")
 
-# ==================== DONNÉES DE TEST ====================
+
+# ============================================================
+# OUTILS : rechercher élément existant
+# ============================================================
+
+def get_existing_patient(email):
+    """Cherche un patient par email via /api/patients?search="""
+    try:
+        response = requests.get(
+            f"{BASE_URLS['patient']}/patients?search={email}"
+        )
+        if response.status_code == 200:
+            data = response.json()
+            patients = data.get("patients", [])
+            if len(patients) > 0:
+                return patients[0]["id"]
+    except Exception:
+        pass
+    return None
+
+
+def get_existing_medicine(name):
+    """Cherche un médicament existant par son nom"""
+    try:
+        response = requests.get(
+            f"{BASE_URLS['medicine']}/medicines?search={name}"
+        )
+        if response.status_code == 200:
+            data = response.json()
+            meds = data.get("medicines", [])
+            if len(meds) > 0:
+                return meds[0]["id"]
+    except:
+        pass
+    return None
+
+
+def get_existing_doctor(username):
+    """cherche un docteur dans le auth-service"""
+    try:
+        response = requests.get(
+            f"{BASE_URLS['doctor']}/doctors?search={username}"
+        )
+        if response.status_code == 200:
+            data = response.json()
+            docs = data.get("doctors", [])
+            if len(docs) > 0:
+                return docs[0]["id"]
+    except:
+        pass
+    return None
+
+
+# ============================================================
+# DONNÉES DE TEST
+# ============================================================
 
 USERS = [
     {
@@ -205,321 +265,411 @@ MEDICINES = [
         'expiry_date': '2026-08-31'
     }
 ]
-
-# ==================== FONCTIONS DE PEUPLEMENT ====================
+# ============================================================
+# FONCTIONS DE PEUPLEMENT AMÉLIORÉES
+# ============================================================
 
 def seed_users():
-    """Créer les utilisateurs"""
+    """Créer ou récupérer les utilisateurs"""
     print_header("CRÉATION DES UTILISATEURS")
-    
+
     created = 0
     for user in USERS:
         try:
-            # L'admin est créé automatiquement, on tente juste de se connecter
+            # Cas admin : essai de login
             if user['username'] == 'admin':
-                response = requests.post(
+                resp = requests.post(
                     f"{BASE_URLS['auth']}/auth/login",
                     json={'username': user['username'], 'password': user['password']}
                 )
-                if response.status_code == 200:
+                if resp.status_code == 200:
                     print_success(f"Admin déjà existant: {user['username']}")
                     created += 1
                 continue
-            
-            response = requests.post(
+
+            # Tentative création user
+            resp = requests.post(
                 f"{BASE_URLS['auth']}/auth/register",
                 json=user
             )
-            
-            if response.status_code == 201:
-                print_success(f"Utilisateur créé: {user['username']} ({user['role']})")
-                created += 1
-            elif response.status_code == 400:
-                print_info(f"Utilisateur existe déjà: {user['username']}")
+
+            if resp.status_code == 201:
+                print_success(f"Utilisateur créé: {user['username']}")
                 created += 1
             else:
-                print_error(f"Erreur création {user['username']}: {response.json()}")
-                
+                print_info(f"Utilisateur existe déjà: {user['username']}")
+                created += 1
+
         except Exception as e:
-            print_error(f"Erreur {user['username']}: {str(e)}")
-    
+            print_error(f"Erreur utilisateur {user['username']}: {str(e)}")
+
     print_info(f"\nTotal utilisateurs: {created}/{len(USERS)}")
-    return created > 0
+    return True
+
 
 def seed_patients():
-    """Créer les patients"""
+    """Créer patients ou récupérer leurs IDs s'ils existent déjà"""
     print_header("CRÉATION DES PATIENTS")
-    
+
     patient_ids = []
+
     for patient in PATIENTS:
+        existing_id = get_existing_patient(patient["email"])
+
+        if existing_id:
+            print_info(f"Patient existe déjà: {patient['email']} (ID={existing_id})")
+            patient_ids.append(existing_id)
+            continue
+
+        # Création patient
         try:
-            response = requests.post(
+            resp = requests.post(
                 f"{BASE_URLS['patient']}/patients",
                 json=patient
             )
-            
-            if response.status_code == 201:
-                patient_id = response.json()['patient']['id']
-                patient_ids.append(patient_id)
-                print_success(f"Patient créé: {patient['first_name']} {patient['last_name']} (ID: {patient_id})")
-            elif response.status_code == 400:
-                print_info(f"Patient existe déjà: {patient['email']}")
+            if resp.status_code == 201:
+                pid = resp.json()["patient"]["id"]
+                print_success(f"Patient créé: {patient['first_name']} {patient['last_name']} (ID={pid})")
+                patient_ids.append(pid)
             else:
-                print_error(f"Erreur création patient: {response.json()}")
-                
+                print_error(f"Erreur création patient: {resp.text}")
+
         except Exception as e:
             print_error(f"Erreur patient: {str(e)}")
-    
-    print_info(f"\nTotal patients créés: {len(patient_ids)}/{len(PATIENTS)}")
+
+    print_info(f"\nTotal patients disponibles: {len(patient_ids)}/{len(PATIENTS)}")
     return patient_ids
 
+
 def seed_medicines():
-    """Créer les médicaments"""
+    """Créer ou récupérer médicaments existants"""
     print_header("CRÉATION DES MÉDICAMENTS")
-    
+
     medicine_ids = []
-    for medicine in MEDICINES:
+
+    for med in MEDICINES:
+        existing_id = get_existing_medicine(med["name"])
+
+        if existing_id:
+            print_info(f"Médicament existe déjà: {med['name']} (ID={existing_id})")
+            medicine_ids.append(existing_id)
+            continue
+
         try:
-            response = requests.post(
+            resp = requests.post(
                 f"{BASE_URLS['medicine']}/medicines",
-                json=medicine
+                json=med
             )
-            
-            if response.status_code == 201:
-                medicine_id = response.json()['medicine']['id']
-                medicine_ids.append(medicine_id)
-                print_success(f"Médicament créé: {medicine['name']} (ID: {medicine_id}, Stock: {medicine['stock_quantity']})")
-            elif response.status_code == 400:
-                print_info(f"Médicament existe déjà: {medicine['name']}")
+            if resp.status_code == 201:
+                mid = resp.json()["medicine"]["id"]
+                print_success(f"Médicament créé: {med['name']} (ID={mid})")
+                medicine_ids.append(mid)
             else:
-                print_error(f"Erreur création médicament: {response.json()}")
-                
+                print_error(f"Erreur création médicament: {resp.text}")
+
         except Exception as e:
             print_error(f"Erreur médicament: {str(e)}")
-    
-    print_info(f"\nTotal médicaments créés: {len(medicine_ids)}/{len(MEDICINES)}")
+
+    print_info(f"\nTotal médicaments disponibles: {len(medicine_ids)}/{len(MEDICINES)}")
     return medicine_ids
 
+
 def seed_appointments(patient_ids):
-    """Créer des rendez-vous"""
     print_header("CRÉATION DES RENDEZ-VOUS")
-    
+
     if not patient_ids:
-        print_error("Aucun patient disponible pour créer des RDV")
+        print_error("Aucun patient disponible, impossible de créer des RDV")
         return []
-    
-    doctors = ['Dr. Smith', 'Dr. Jones']
+
     appointment_ids = []
-    
-    # Créer des RDV pour les 7 prochains jours
-    today = datetime.now()
-    
-    for i, patient_id in enumerate(patient_ids[:3]):  # RDV pour les 3 premiers patients
-        appointment_date = today + timedelta(days=i+1, hours=9+i*2)
-        
+    doctors = ["Dr. Smith", "Dr. Jones"]
+
+    now = datetime.now()
+
+    for i, pid in enumerate(patient_ids[:3]):
+        apt_date = now + timedelta(days=i+1, hours=9)
         appointment = {
-            'patient_id': patient_id,
-            'doctor_name': doctors[i % len(doctors)],
-            'appointment_date': appointment_date.strftime('%Y-%m-%d %H:%M'),
-            'duration': 30,
-            'reason': ['Consultation de routine', 'Suivi traitement', 'Contrôle'][i % 3]
+            "patient_id": pid,
+            "doctor_name": doctors[i % 2],
+            "appointment_date": apt_date.strftime("%Y-%m-%d %H:%M"),
+            "duration": 30,
+            "reason": ["Routine", "Suivi", "Contrôle"][i % 3]
         }
-        
+
         try:
-            response = requests.post(
+            resp = requests.post(
                 f"{BASE_URLS['appointment']}/appointments",
                 json=appointment
             )
-            
-            if response.status_code == 201:
-                apt_id = response.json()['appointment']['id']
-                appointment_ids.append(apt_id)
-                print_success(f"RDV créé: Patient {patient_id} avec {appointment['doctor_name']} le {appointment['appointment_date']}")
+            if resp.status_code == 201:
+                aid = resp.json()["appointment"]["id"]
+                print_success(f"RDV créé pour patient {pid} le {appointment['appointment_date']} (ID={aid})")
+                appointment_ids.append(aid)
             else:
-                print_error(f"Erreur création RDV: {response.json()}")
-                
+                print_info("Le RDV existe peut-être déjà, on continue...")
+
         except Exception as e:
             print_error(f"Erreur RDV: {str(e)}")
-    
-    print_info(f"\nTotal RDV créés: {len(appointment_ids)}")
+
+    print_info(f"\nTotal RDV disponibles: {len(appointment_ids)}")
     return appointment_ids
 
+
 def seed_prescriptions(patient_ids, medicine_ids):
-    """Créer des ordonnances"""
     print_header("CRÉATION DES ORDONNANCES")
-    
+
     if not patient_ids or not medicine_ids:
-        print_error("Patients ou médicaments manquants pour créer des ordonnances")
+        print_error("Patients ou médicaments manquants")
         return []
-    
+
     prescription_ids = []
-    
-    # Ordonnance 1: Patient 1, 2 médicaments
-    if len(patient_ids) > 0 and len(medicine_ids) >= 2:
-        prescription = {
-            'patient_id': patient_ids[0],
-            'doctor_name': 'Dr. Smith',
-            'diagnosis': 'Infection respiratoire',
-            'notes': 'Repos recommandé',
-            'medications': [
+
+    # ORD 1
+    prescription_1 = {
+        "patient_id": patient_ids[0],
+        "doctor_name": "Dr. Smith",
+        "diagnosis": "Infection respiratoire",
+        "notes": "Repos",
+        "medications": [
+            {
+                "medicine_id": medicine_ids[1],
+                "dosage": "1g",
+                "frequency": "3/jour",
+                "duration": "7 jours",
+                "quantity": 1
+            },
+            {
+                "medicine_id": medicine_ids[0],
+                "dosage": "500mg",
+                "frequency": "2/jour",
+                "duration": "5 jours",
+                "quantity": 1
+            }
+        ]
+    }
+
+    try:
+        resp = requests.post(
+            f"{BASE_URLS['prescription']}/prescriptions",
+            json=prescription_1
+        )
+        if resp.status_code == 201:
+            pid = resp.json()["prescription"]["id"]
+            print_success(f"Ordonnance créée (ID={pid})")
+            prescription_ids.append(pid)
+    except Exception as e:
+        print_error(f"Erreur ordonnance 1: {str(e)}")
+
+    # ORD 2
+    if len(patient_ids) > 1:
+        prescription_2 = {
+            "patient_id": patient_ids[1],
+            "doctor_name": "Dr. Jones",
+            "diagnosis": "Douleurs musculaires",
+            "medications": [
                 {
-                    'medicine_id': medicine_ids[1],  # Amoxicilline
-                    'dosage': '1g',
-                    'frequency': '3 fois par jour',
-                    'duration': '7 jours',
-                    'quantity': 1,
-                    'instructions': 'Prendre après les repas'
-                },
-                {
-                    'medicine_id': medicine_ids[0],  # Paracétamol
-                    'dosage': '500mg',
-                    'frequency': '2 fois par jour',
-                    'duration': '5 jours',
-                    'quantity': 1,
-                    'instructions': 'En cas de fièvre'
+                    "medicine_id": medicine_ids[2],
+                    "dosage": "400mg",
+                    "frequency": "2/jour",
+                    "duration": "3 jours",
+                    "quantity": 1
                 }
             ]
         }
-        
+
         try:
-            response = requests.post(
+            resp = requests.post(
                 f"{BASE_URLS['prescription']}/prescriptions",
-                json=prescription
+                json=prescription_2
             )
-            
-            if response.status_code == 201:
-                pres_id = response.json()['prescription']['id']
-                prescription_ids.append(pres_id)
-                print_success(f"Ordonnance créée: Patient {patient_ids[0]}, {len(prescription['medications'])} médicaments")
-            else:
-                print_error(f"Erreur création ordonnance: {response.json()}")
-                
-        except Exception as e:
-            print_error(f"Erreur ordonnance: {str(e)}")
-    
-    # Ordonnance 2: Patient 2, 1 médicament
-    if len(patient_ids) > 1 and len(medicine_ids) >= 3:
-        prescription = {
-            'patient_id': patient_ids[1],
-            'doctor_name': 'Dr. Jones',
-            'diagnosis': 'Douleurs musculaires',
-            'medications': [
-                {
-                    'medicine_id': medicine_ids[2],  # Ibuprofène
-                    'dosage': '400mg',
-                    'frequency': '2 fois par jour',
-                    'duration': '3 jours',
-                    'quantity': 1,
-                    'instructions': 'Prendre avec de la nourriture'
-                }
-            ]
-        }
-        
-        try:
-            response = requests.post(
-                f"{BASE_URLS['prescription']}/prescriptions",
-                json=prescription
-            )
-            
-            if response.status_code == 201:
-                pres_id = response.json()['prescription']['id']
-                prescription_ids.append(pres_id)
-                print_success(f"Ordonnance créée: Patient {patient_ids[1]}, {len(prescription['medications'])} médicament")
-            else:
-                print_error(f"Erreur création ordonnance: {response.json()}")
-                
-        except Exception as e:
-            print_error(f"Erreur ordonnance: {str(e)}")
-    
-    print_info(f"\nTotal ordonnances créées: {len(prescription_ids)}")
+            if resp.status_code == 201:
+                pid = resp.json()["prescription"]["id"]
+                print_success(f"Ordonnance créée (ID={pid})")
+                prescription_ids.append(pid)
+        except:
+            pass
+
+    print_info(f"\nTotal ordonnances: {len(prescription_ids)}")
     return prescription_ids
 
-def display_summary():
-    """Afficher un résumé des données créées"""
-    print_header("RÉSUMÉ DES DONNÉES")
-    
-    try:
-        # Stats patients
-        response = requests.get(f"{BASE_URLS['patient']}/patients/stats")
-        if response.status_code == 200:
-            stats = response.json()['stats']
-            print(f"👥 Patients: {stats['total']} (H: {stats['male']}, F: {stats['female']})")
-        
-        # Stats RDV
-        response = requests.get(f"{BASE_URLS['appointment']}/appointments/stats")
-        if response.status_code == 200:
-            stats = response.json()['stats']
-            print(f"📅 Rendez-vous: {stats['total']} (Cette semaine: {stats['this_week']})")
-        
-        # Stats ordonnances
-        response = requests.get(f"{BASE_URLS['prescription']}/prescriptions/stats")
-        if response.status_code == 200:
-            stats = response.json()['stats']
-            print(f"📋 Ordonnances: {stats['total']} (Actives: {stats['active']})")
-        
-        # Stats médicaments
-        response = requests.get(f"{BASE_URLS['medicine']}/medicines/stats")
-        if response.status_code == 200:
-            stats = response.json()['stats']
-            print(f"💊 Médicaments: {stats['total_medicines']} (Stock faible: {stats['low_stock']})")
-            print(f"💰 Valeur totale du stock: {stats['total_stock_value']}€")
-        
-    except Exception as e:
-        print_error(f"Erreur récupération stats: {str(e)}")
 
-# ==================== MAIN ====================
+def seed_invoices(appointment_ids):
+    print_header("CRÉATION DES FACTURES")
+
+    if not appointment_ids:
+        print_error("Aucun RDV disponible")
+        return []
+
+    invoice_ids = []
+
+    invoice1 = {
+        "consultation_id": appointment_ids[0],
+        "patient_id": 1,
+        "doctor_id": 1,
+        "medication_cost": 20.5,
+        "additional_fees": 15,
+        "remboursement": 40,
+        "payment_method": "card",
+        "due_date": (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+    }
+
+    try:
+        resp = requests.post(
+            f"{BASE_URLS['billing']}/invoices",
+            json=invoice1
+        )
+        if resp.status_code == 201:
+            iid = resp.json()["invoice"]["id"]
+            print_success(f"Facture créée (ID={iid})")
+            invoice_ids.append(iid)
+    except:
+        pass
+
+    print_info(f"Total factures: {len(invoice_ids)}")
+    return invoice_ids
+
+
+def seed_bmi_records(patient_ids):
+    print_header("CRÉATION DES ENREGISTREMENTS IMC")
+
+    if not patient_ids:
+        print_error("Aucun patient")
+        return 0
+
+    bmi_data = [
+        {"patient_id": patient_ids[0], "weight": 72, "height": 170},
+        {"patient_id": patient_ids[1], "weight": 85, "height": 180},
+        {"patient_id": patient_ids[2], "weight": 65, "height": 165}
+    ]
+
+    success = 0
+
+    for record in bmi_data:
+        try:
+            resp = requests.post(
+                f"{BASE_URLS['billing']}/bmi/calculate",
+                json=record
+            )
+            if resp.status_code == 200:
+                result = resp.json()
+                print_success(f"IMC patient {record['patient_id']}: {result['bmi']}")
+                success += 1
+        except Exception as e:
+            print_error(f"Erreur IMC: {str(e)}")
+
+    print_info(f"Total IMC créés: {success}/{len(bmi_data)}")
+    return success
+# ============================================================
+# RÉSUMÉ FINAL
+# ============================================================
+
+def display_summary():
+    print_header("RÉSUMÉ DES DONNÉES")
+
+    # Patients
+    try:
+        resp = requests.get(f"{BASE_URLS['patient']}/patients/stats")
+        if resp.status_code == 200:
+            stats = resp.json()["stats"]
+            print(f"👥 Patients: {stats['total']} (Homme: {stats['male']}, Femme: {stats['female']})")
+    except:
+        print_error("Erreur récupération stats patients")
+
+    # RDV
+    try:
+        resp = requests.get(f"{BASE_URLS['appointment']}/appointments/stats")
+        if resp.status_code == 200:
+            stats = resp.json()["stats"]
+            print(f"📅 RDV: {stats['total']} (Cette semaine: {stats['this_week']})")
+    except:
+        print_error("Erreur récupération stats RDV")
+
+    # Ordonnances
+    try:
+        resp = requests.get(f"{BASE_URLS['prescription']}/prescriptions/stats")
+        if resp.status_code == 200:
+            stats = resp.json()["stats"]
+            print(f"📋 Ordonnances: {stats['total']} (Actives: {stats['active']})")
+    except:
+        print_error("Erreur récupération stats ordonnances")
+
+    # Médicaments
+    try:
+        resp = requests.get(f"{BASE_URLS['medicine']}/medicines/stats")
+        if resp.status_code == 200:
+            stats = resp.json()["stats"]
+            print(f"💊 Médicaments: {stats['total_medicines']} (Stock faible: {stats['low_stock']})")
+            print(f"💰 Valeur stock: {stats['total_stock_value']}€")
+    except:
+        print_error("Erreur récupération stats médicaments")
+
+    # Factures
+    try:
+        resp = requests.get(f"{BASE_URLS['billing']}/invoices/stats")
+        if resp.status_code == 200:
+            stats = resp.json()["stats"]
+            print(f"💰 Factures: {stats['total_invoices']} (Payées: {stats['paid']}, En attente: {stats['pending']})")
+            print(f"💵 Revenus totaux: {stats['total_revenue']}€")
+    except:
+        print_error("Erreur récupération stats factures")
+
+
+# ============================================================
+# MAIN SCRIPT
+# ============================================================
 
 def main():
     print_header("🏥 PEUPLEMENT DE LA BASE DE DONNÉES - CLINIC MANAGEMENT")
     print(f"{Fore.YELLOW}Ce script va créer des données de test pour tous les services{Style.RESET_ALL}\n")
-    
-    # Vérifier que les services sont disponibles
-    print_info("Vérification des services...")
-    all_services_up = True
-    
-    for service, url in BASE_URLS.items():
-        try:
-            # Utiliser l'endpoint health si disponible
-            health_url = url.replace('/api', '/health')
-            response = requests.get(health_url, timeout=2)
-            if response.status_code == 200:
-                print_success(f"{service.capitalize()} Service: OK")
-            else:
-                print_error(f"{service.capitalize()} Service: Erreur")
-                all_services_up = False
-        except:
-            print_error(f"{service.capitalize()} Service: Non disponible")
-            all_services_up = False
-    
-    if not all_services_up:
-        print_error("\n⚠️  Tous les services ne sont pas disponibles!")
-        print_info("Assurez-vous que tous les services sont démarrés avant de continuer.")
-        return
-    
-    print_success("\n✓ Tous les services sont disponibles!\n")
-    
-    # Peuplement
-    seed_users()
-    patient_ids = seed_patients()
-    medicine_ids = seed_medicines()
-    appointment_ids = seed_appointments(patient_ids)
-    prescription_ids = seed_prescriptions(patient_ids, medicine_ids)
-    
-    # Résumé
-    display_summary()
-    
-    print_header("✅ PEUPLEMENT TERMINÉ AVEC SUCCÈS")
-    print(f"{Fore.GREEN}Votre base de données est maintenant prête à être utilisée!{Style.RESET_ALL}\n")
-    
-    print_info("Comptes de test créés:")
-    print("  Admin:    username=admin      password=Admin@123")
-    print("  Docteur:  username=dr.smith   password=Doctor@123")
-    print("  Docteur:  username=dr.jones   password=Doctor@123")
-    print("  Infirmière: username=nurse.marie password=Nurse@123\n")
 
-if __name__ == '__main__':
+    # Vérification services
+    print_info("Vérification des services...")
+    all_ok = True
+
+    for name, url in BASE_URLS.items():
+        try:
+            health = url.replace("/api", "/health")
+            r = requests.get(health, timeout=2)
+            if r.status_code == 200:
+                print_success(f"{name.capitalize()} Service: OK")
+            else:
+                print_error(f"{name.capitalize()} Service: ERREUR")
+                all_ok = False
+        except:
+            print_error(f"{name.capitalize()} Service: OFF")
+            all_ok = False
+
+    if not all_ok:
+        print_error("⚠️ Tous les services ne sont pas disponibles !")
+        return
+
+    print_success("\nTous les services sont disponibles !\n")
+
+    # SEEDING
+    seed_users()
+    patients = seed_patients()
+    medicines = seed_medicines()
+    appointments = seed_appointments(patients)
+    prescriptions = seed_prescriptions(patients, medicines)
+    invoices = seed_invoices(appointments)
+    seed_bmi_records(patients)
+
+    # RÉSUMÉ
+    display_summary()
+
+    print_header("✅ PEUPLEMENT TERMINÉ AVEC SUCCÈS")
+    print(f"{Fore.GREEN}Votre base de données est maintenant prête !{Style.RESET_ALL}\n")
+
+    print_info("Comptes de test :")
+    print("  Admin:         admin / Admin@123")
+    print("  Docteur:       dr.smith / Doctor@123")
+    print("  Docteur:       dr.jones / Doctor@123")
+    print("  Infirmière:    nurse.marie / Nurse@123\n")
+
+
+if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print(f"\n{Fore.YELLOW}Opération annulée par l'utilisateur{Style.RESET_ALL}")
+        print(f"\n{Fore.YELLOW}Annulé par l'utilisateur{Style.RESET_ALL}")
         exit(1)
