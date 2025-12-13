@@ -16,9 +16,9 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
 # URLs des autres services
-APPOINTMENT_SERVICE_URL = os.getenv('APPOINTMENT_SERVICE_URL', 'http://localhost:5003')
-PATIENT_SERVICE_URL = os.getenv('PATIENT_SERVICE_URL', 'http://localhost:5002')
-DOCTOR_SERVICE_URL = os.getenv('DOCTOR_SERVICE_URL', 'http://localhost:5006')
+APPOINTMENT_SERVICE_URL = os.getenv('APPOINTMENT_SERVICE_URL', 'http://appointment-service:5003')
+PATIENT_SERVICE_URL = os.getenv('PATIENT_SERVICE_URL', 'http://patient-service:5002')
+DOCTOR_SERVICE_URL = os.getenv('DOCTOR_SERVICE_URL', 'http://doctor-service:5006')
 
 # ==================== MODELS ====================
 class Invoice(db.Model):

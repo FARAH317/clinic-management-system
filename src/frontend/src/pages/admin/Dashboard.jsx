@@ -4,14 +4,13 @@ import { Users, Calendar, FileText, Pill, Activity, TrendingUp, Clock, AlertCirc
 
 // URLs des microservices
 const API_URLS = {
-  patient: 'http://localhost:5002/api',
-  appointment: 'http://localhost:5003/api',
-  prescription: 'http://localhost:5004/api',
-  medicine: 'http://localhost:5005/api',
-  doctor: 'http://localhost:5006/api',
-  billing: 'http://localhost:5007/api'
+  patient: 'http://patient-service:5002/api',
+  appointment: 'http://appointment-service:5003/api',
+  prescription: 'http://prescription-service:5004/api',
+  medicine: 'http://medicine-service:5005/api',
+  doctor: 'http://doctor-service:5006/api',
+  billing: 'http://billing-service:5007/api'
 };
-
 
 
 export default function AdminDashboard() {
@@ -441,24 +440,51 @@ const fetchIMCHistory = async (patientId) => {
 };
 
 const handleCreateInvoice = async () => {
-  if (!newInvoice.consultation_id || !newInvoice.patient_id || !newInvoice.doctor_id) {
-    alert('Veuillez remplir tous les champs obligatoires');
-    return;
-  }
-
   try {
-    setLoading(true);
-    const res = await fetch(`${API_URLS.billing}/invoices`, {
+    // ✅ Debug : Afficher les données du formulaire
+    console.log('📋 Données facture:', newInvoice);
+
+    // ✅ Vérifications correctes
+    if (!newInvoice.consultation_id) {
+      alert('❌ Veuillez sélectionner un rendez-vous');
+      return;
+    }
+
+    // ✅ Récupérer automatiquement patient_id et doctor_id depuis le rendez-vous
+    const selectedAppointment = appointments.find(a => a.id === parseInt(newInvoice.consultation_id));
+    
+    if (!selectedAppointment) {
+      alert('❌ Rendez-vous non trouvé');
+      return;
+    }
+
+    const invoiceData = {
+      consultation_id: parseInt(newInvoice.consultation_id),
+      patient_id: selectedAppointment.patient_id, // ✅ Auto depuis RDV
+      doctor_id: selectedAppointment.doctor_id || 1, // ✅ Auto depuis RDV
+      medication_cost: parseFloat(newInvoice.medication_cost) || 0,
+      additional_fees: parseFloat(newInvoice.additional_fees) || 0,
+      remboursement: parseFloat(newInvoice.remboursement) || 0,
+      payment_method: newInvoice.payment_method || 'cash',
+      due_date: newInvoice.due_date || null
+    };
+
+    console.log('📤 Envoi facture:', invoiceData); // Debug
+
+    const response = await fetch(`${API_URLS.billing}/invoices`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newInvoice)
+      body: JSON.stringify(invoiceData)
     });
-    
-    const data = await res.json();
-    if (data.success) {
-      await logActivity('create', 'invoice', data.invoice?.id || 'N/A', 
-        `Facture créée pour le patient #${newInvoice.patient_id}`);
-      alert('Facture créée avec succès!');
+
+    const result = await response.json();
+    console.log('📥 Réponse API:', result); // Debug
+
+    if (result.success) {
+      await logActivity('create', 'invoice', result.invoice?.id || 'N/A', 
+        `Facture créée pour RDV #${newInvoice.consultation_id}`);
+      
+      alert('✅ Facture créée avec succès !');
       setShowCreateInvoice(false);
       setNewInvoice({
         consultation_id: '', patient_id: '', doctor_id: '',
@@ -468,13 +494,11 @@ const handleCreateInvoice = async () => {
       fetchInvoices();
       fetchBillingData();
     } else {
-      alert('Erreur: ' + data.error);
+      alert('❌ Erreur: ' + (result.error || 'Impossible de créer la facture'));
     }
   } catch (error) {
-    alert('Erreur de création de facture');
-    console.error(error);
-  } finally {
-    setLoading(false);
+    console.error('❌ Erreur création facture:', error);
+    alert('❌ Erreur de connexion au serveur');
   }
 };
 
@@ -756,58 +780,75 @@ Signature: ${prescription.doctor_name}
   };
   const handleAddPrescription = async () => {
   try {
-    if (!newPrescription.patient_id || !newPrescription.doctor_id || !newPrescription.diagnosis) {
-      alert('Veuillez remplir tous les champs obligatoires');
+    // ✅ Vérifications correctes
+    if (!newPrescription.patient_id || !newPrescription.doctor_id || !newPrescription.diagnosis?.trim()) {
+      alert('❌ Veuillez remplir tous les champs obligatoires (patient, médecin, diagnostic)');
       return;
     }
 
     if (newPrescription.medications.length === 0) {
-      alert('Veuillez ajouter au moins un médicament');
+      alert('❌ Veuillez ajouter au moins un médicament à l\'ordonnance');
       return;
     }
 
-    // Trouver le nom du médecin sélectionné
-const selectedDoctor = doctors.find(d => d.id === parseInt(newPrescription.doctor_id));
-const doctorName = selectedDoctor ? `${selectedDoctor.first_name} ${selectedDoctor.last_name}` : '';
+    // ✅ Récupérer le nom du médecin pour l'API
+    const selectedDoctor = doctors.find(d => d.id === parseInt(newPrescription.doctor_id));
+    if (!selectedDoctor) {
+      alert('❌ Médecin non trouvé');
+      return;
+    }
+    const doctorName = `Dr. ${selectedDoctor.first_name} ${selectedDoctor.last_name}`;
 
-const prescriptionData = {
-  ...newPrescription,
-  doctor_name: doctorName,
-  prescription_date: new Date().toISOString(),
-  status: 'active'
-};
+    // ✅ Préparer les données pour l'API
+    const prescriptionData = {
+      patient_id: parseInt(newPrescription.patient_id),
+      doctor_name: doctorName, // ✅ API attend doctor_name, pas doctor_id
+      diagnosis: newPrescription.diagnosis.trim(),
+      notes: newPrescription.notes?.trim() || '',
+      valid_until: newPrescription.valid_until || null,
+      medications: newPrescription.medications.map(med => ({
+        medicine_id: parseInt(med.medicine_id),
+        medicine_name: med.medicine_name,
+        dosage: med.dosage,
+        frequency: med.frequency,
+        duration: med.duration || '',
+        quantity: parseInt(med.quantity) || 1,
+        instructions: med.instructions || ''
+      }))
+    };
+
+    console.log('📤 Envoi ordonnance:', prescriptionData); // Debug
 
     const response = await fetch(`${API_URLS.prescription}/prescriptions`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(prescriptionData)
     });
 
     const result = await response.json();
+    console.log('📥 Réponse API:', result); // Debug
 
     if (result.success) {
-      alert('Ordonnance créée avec succès!');
+      await logActivity('create', 'prescription', result.prescription?.id || 'N/A',
+        `Ordonnance créée par ${doctorName} pour patient #${newPrescription.patient_id}`);
+      
+      alert('✅ Ordonnance créée avec succès !');
       setShowAddPrescriptionModal(false);
       setNewPrescription({
-        patient_id: '',
-        doctor_id: '',
-        diagnosis: '',
-        notes: '',
-        valid_until: '',
-        medications: []
+        patient_id: '', doctor_id: '', diagnosis: '',
+        notes: '', valid_until: '', medications: []
       });
       fetchPrescriptions();
       if (activeTab === 'dashboard') fetchDashboardData();
     } else {
-      alert('Erreur: ' + (result.error || 'Impossible de créer l\'ordonnance'));
+      alert('❌ Erreur: ' + (result.error || 'Impossible de créer l\'ordonnance'));
     }
   } catch (error) {
-    console.error('Erreur:', error);
-    alert('Erreur lors de la création de l\'ordonnance');
+    console.error('❌ Erreur création ordonnance:', error);
+    alert('❌ Erreur de connexion au serveur');
   }
 };
+
 
 const addMedicationToPrescription = () => {
   if (!newMedication.medicine_name || !newMedication.dosage || !newMedication.frequency) {
@@ -1127,16 +1168,23 @@ const handleDeleteDoctor = async (doctor) => {
 // === GESTION RENDEZ-VOUS ===
 const handleAddAppointment = async () => {
   try {
-    if (!newAppointment.patient_id || !newAppointment.doctor_id || !newAppointment.appointment_date) {
-      alert('❌ Veuillez remplir tous les champs obligatoires');
+    // ✅ Vérification correcte
+    if (!newAppointment.patient_id || !newAppointment.doctor_id || 
+        !newAppointment.appointment_date || !newAppointment.appointment_time || 
+        !newAppointment.reason?.trim()) {
+      alert('❌ Veuillez remplir tous les champs obligatoires (patient, médecin, date, heure, motif)');
       return;
     }
 
-    // Combiner date et heure
-    const appointmentDateTime = `${newAppointment.appointment_date}T${newAppointment.appointment_time || '09:00'}:00`;
+    // ✅ Combiner date et heure au format ISO
+    const appointmentDateTime = `${newAppointment.appointment_date} ${newAppointment.appointment_time}:00`;
 
     const selectedDoctor = doctors.find(d => d.id === parseInt(newAppointment.doctor_id));
-    const doctorName = selectedDoctor ? `${selectedDoctor.first_name} ${selectedDoctor.last_name}` : '';
+    const doctorName = selectedDoctor ? `Dr. ${selectedDoctor.first_name} ${selectedDoctor.last_name}` : '';
+
+    // ✅ Récupérer le patient pour le nom
+    const selectedPatient = patients.find(p => p.id === parseInt(newAppointment.patient_id));
+    const patientName = selectedPatient ? `${selectedPatient.first_name} ${selectedPatient.last_name}` : '';
 
     const appointmentData = {
       patient_id: parseInt(newAppointment.patient_id),
@@ -1144,8 +1192,9 @@ const handleAddAppointment = async () => {
       doctor_name: doctorName,
       appointment_date: appointmentDateTime,
       reason: newAppointment.reason.trim(),
-      notes: newAppointment.notes.trim(),
-      status: 'scheduled'
+      notes: newAppointment.notes?.trim() || '',
+      status: 'scheduled',
+      duration: 30
     };
 
     const response = await fetch(`${API_URLS.appointment}/appointments`, {
@@ -1158,7 +1207,8 @@ const handleAddAppointment = async () => {
 
     if (result.success) {
       await logActivity('create', 'appointment', result.appointment?.id || 'N/A', 
-        `Rendez-vous créé: ${patientName} avec Dr. ${doctorName} le ${new Date(appointmentDateTime).toLocaleDateString('fr-FR')}`);
+        `Rendez-vous créé: ${patientName} avec ${doctorName} le ${new Date(appointmentDateTime).toLocaleDateString('fr-FR')}`);
+      
       alert('✅ Rendez-vous créé avec succès !');
       setShowAddAppointmentModal(false);
       setNewAppointment({
@@ -2351,121 +2401,210 @@ const renderActivityPage = () => {
 
       {/* Modal Créer Facture */}
       {showCreateInvoice && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-2xl font-bold text-gray-800">Créer une Facture</h3>
-                <button onClick={() => setShowCreateInvoice(false)} className="text-gray-500 hover:text-gray-700">
-                  <span className="text-2xl">×</span>
-                </button>
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="p-6">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-2xl font-bold text-gray-800">Créer une Facture</h3>
+          <button 
+            onClick={() => setShowCreateInvoice(false)} 
+            className="text-gray-500 hover:text-gray-700"
+          >
+            <span className="text-2xl">×</span>
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          {/* ✅ SELECT RENDEZ-VOUS avec auto-remplissage */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Rendez-vous *
+            </label>
+            <select
+              value={newInvoice.consultation_id}
+              onChange={(e) => {
+                const aptId = parseInt(e.target.value);
+                const apt = appointments.find(a => a.id === aptId);
+                
+                // ✅ Auto-remplir patient_id et doctor_id
+                setNewInvoice({
+                  ...newInvoice,
+                  consultation_id: e.target.value,
+                  patient_id: apt?.patient_id || '',
+                  doctor_id: apt?.doctor_id || ''
+                });
+              }}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              required
+            >
+              <option value="">Sélectionner un rendez-vous</option>
+              {appointments.map(apt => (
+                <option key={apt.id} value={apt.id}>
+                  RDV #{apt.id} - {apt.doctor_name} - Patient #{apt.patient_id} - {new Date(apt.appointment_date).toLocaleDateString('fr-FR')}
+                </option>
+              ))}
+            </select>
+            
+            {/* ✅ Afficher les infos auto-remplies */}
+            {newInvoice.consultation_id && (
+              <div className="mt-2 p-3 bg-blue-50 rounded-lg text-sm">
+                <p className="text-blue-800">
+                  ✅ Patient ID: #{newInvoice.patient_id} | Médecin ID: #{newInvoice.doctor_id}
+                </p>
               </div>
+            )}
+          </div>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Rendez-vous *</label>
-                  <select
-                    value={newInvoice.consultation_id}
-                    onChange={(e) => {
-                      const apt = appointments.find(a => a.id === parseInt(e.target.value));
-                      setNewInvoice({
-                        ...newInvoice,
-                        consultation_id: e.target.value,
-                        patient_id: apt?.patient_id || '',
-                        doctor_id: apt?.doctor_id || ''
-                      });
-                    }}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                    required
-                  >
-                    <option value="">Sélectionner un rendez-vous</option>
-                    {appointments.map(apt => (
-                      <option key={apt.id} value={apt.id}>
-                        RDV #{apt.id} - {apt.doctor_name} - {new Date(apt.appointment_date).toLocaleDateString('fr-FR')}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+          {/* ✅ COÛTS */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Coût médicaments (€)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={newInvoice.medication_cost}
+                onChange={(e) => setNewInvoice({
+                  ...newInvoice, 
+                  medication_cost: parseFloat(e.target.value) || 0
+                })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                placeholder="0.00"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Frais additionnels (€)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={newInvoice.additional_fees}
+                onChange={(e) => setNewInvoice({
+                  ...newInvoice, 
+                  additional_fees: parseFloat(e.target.value) || 0
+                })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                placeholder="0.00"
+              />
+            </div>
+          </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Coût médicaments (€)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={newInvoice.medication_cost}
-                      onChange={(e) => setNewInvoice({...newInvoice, medication_cost: parseFloat(e.target.value) || 0})}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Frais additionnels (€)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={newInvoice.additional_fees}
-                      onChange={(e) => setNewInvoice({...newInvoice, additional_fees: parseFloat(e.target.value) || 0})}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                </div>
+          {/* ✅ REMBOURSEMENT ET PAIEMENT */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Remboursement (€)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={newInvoice.remboursement}
+                onChange={(e) => setNewInvoice({
+                  ...newInvoice, 
+                  remboursement: parseFloat(e.target.value) || 0
+                })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                placeholder="0.00"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Méthode de paiement
+              </label>
+              <select
+                value={newInvoice.payment_method}
+                onChange={(e) => setNewInvoice({
+                  ...newInvoice, 
+                  payment_method: e.target.value
+                })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="cash">Espèces</option>
+                <option value="card">Carte bancaire</option>
+                <option value="check">Chèque</option>
+                <option value="insurance">Assurance</option>
+              </select>
+            </div>
+          </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Remboursement (€)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={newInvoice.remboursement}
-                      onChange={(e) => setNewInvoice({...newInvoice, remboursement: parseFloat(e.target.value) || 0})}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Méthode de paiement</label>
-                    <select
-                      value={newInvoice.payment_method}
-                      onChange={(e) => setNewInvoice({...newInvoice, payment_method: e.target.value})}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                    >
-                      <option value="cash">Espèces</option>
-                      <option value="card">Carte bancaire</option>
-                      <option value="check">Chèque</option>
-                      <option value="insurance">Assurance</option>
-                    </select>
-                  </div>
-                </div>
+          {/* ✅ DATE D'ÉCHÉANCE */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Date d'échéance
+            </label>
+            <input
+              type="date"
+              value={newInvoice.due_date}
+              onChange={(e) => setNewInvoice({
+                ...newInvoice, 
+                due_date: e.target.value
+              })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Date d'échéance</label>
-                  <input
-                    type="date"
-                    value={newInvoice.due_date}
-                    onChange={(e) => setNewInvoice({...newInvoice, due_date: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-
-                <div className="flex justify-end gap-4 pt-4">
-                  <button
-                    onClick={() => setShowCreateInvoice(false)}
-                    className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    onClick={handleCreateInvoice}
-                    disabled={loading}
-                    className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:opacity-50"
-                  >
-                    {loading ? 'Création...' : 'Créer la facture'}
-                  </button>
-                </div>
+          {/* ✅ RÉCAPITULATIF MONTANTS */}
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mt-4">
+            <h4 className="font-semibold text-gray-700 mb-3">Récapitulatif</h4>
+            
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Coût médicaments:</span>
+                <span className="font-medium">{(newInvoice.medication_cost || 0).toFixed(2)} €</span>
+              </div>
+              
+              <div className="flex justify-between">
+                <span className="text-gray-600">Frais additionnels:</span>
+                <span className="font-medium">{(newInvoice.additional_fees || 0).toFixed(2)} €</span>
+              </div>
+              
+              <div className="flex justify-between text-green-600">
+                <span>Remboursement:</span>
+                <span className="font-medium">- {(newInvoice.remboursement || 0).toFixed(2)} €</span>
+              </div>
+              
+              <hr className="my-2" />
+              
+              <div className="flex justify-between text-lg font-bold text-gray-900">
+                <span>Total à payer:</span>
+                <span className="text-indigo-600">
+                  {(
+                    (newInvoice.medication_cost || 0) + 
+                    (newInvoice.additional_fees || 0) - 
+                    (newInvoice.remboursement || 0)
+                  ).toFixed(2)} €
+                </span>
               </div>
             </div>
           </div>
+
+          {/* ✅ BOUTONS D'ACTION */}
+          <div className="flex justify-end gap-4 pt-4">
+            <button
+              onClick={() => setShowCreateInvoice(false)}
+              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+            >
+              Annuler
+            </button>
+            
+            <button
+              onClick={handleCreateInvoice}
+              disabled={loading || !newInvoice.consultation_id}
+              className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Création...' : 'Créer la facture'}
+            </button>
+          </div>
         </div>
-      )}
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 };

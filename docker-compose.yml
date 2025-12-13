@@ -19,122 +19,179 @@ services:
       timeout: 5s
       retries: 5
 
+  # Service d'authentification
   auth-service:
     build:
       context: ./src/backend/services/auth-service
       dockerfile: Dockerfile
-    container_name: clinic-management-auth-service
+    container_name: auth-service
     ports:
-    -   "5001:5001"
+      - "5001:5001"
     depends_on:
-       postgres:
-          condition: service_healthy
+      postgres:
+        condition: service_healthy
     environment:
-    -  FLASK_ENV=production
-    -  DATABASE_URL=postgresql://postgres:postgres@postgres:5432/medical_system
+      - FLASK_ENV=production
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/medical_system
+      - PORT=5001
     networks:
-    -  medical_network
+      - medical_network
+    restart: unless-stopped
 
-  # Microservice Patient
+  # Service Patient
   patient-service:
-    build: ./src/backend/services/patient-service
-    container_name: patient_service
+    build:
+      context: ./src/backend/services/patient-service
+      dockerfile: Dockerfile
+    container_name: patient-service
     ports:
       - "5002:5002"
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/medical_system
-      PORT: 5002
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/medical_system
+      - PORT=5002
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - medical_network
+    restart: unless-stopped
 
-  # Microservice Appointment
+  # Service Rendez-vous
   appointment-service:
-    build: ./src/backend/services/appointment-service
-    container_name: appointment_service
+    build:
+      context: ./src/backend/services/appointment-service
+      dockerfile: Dockerfile
+    container_name: appointment-service
     ports:
       - "5003:5003"
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/medical_system
-      PORT: 5003
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/medical_system
+      - PORT=5003
+      - PATIENT_SERVICE_URL=http://patient-service:5002
     depends_on:
       postgres:
         condition: service_healthy
+      patient-service:
+        condition: service_started
     networks:
       - medical_network
+    restart: unless-stopped
 
-  # Microservice Prescription
+  # Service Ordonnances
   prescription-service:
-    build: ./src/backend/services/prescription-service
-    container_name: prescription_service
+    build:
+      context: ./src/backend/services/prescription-service
+      dockerfile: Dockerfile
+    container_name: prescription-service
     ports:
       - "5004:5004"
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/medical_system
-      PORT: 5004
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/medical_system
+      - PORT=5004
+      - PATIENT_SERVICE_URL=http://patient-service:5002
+      - MEDICINE_SERVICE_URL=http://medicine-service:5005
     depends_on:
       postgres:
         condition: service_healthy
+      patient-service:
+        condition: service_started
+      medicine-service:
+        condition: service_started
     networks:
       - medical_network
+    restart: unless-stopped
 
-  # Microservice Medicine
+  # Service Médicaments
   medicine-service:
-    build: ./src/backend/services/medicine-service
-    container_name: medicine_service
+    build:
+      context: ./src/backend/services/medicine-service
+      dockerfile: Dockerfile
+    container_name: medicine-service
     ports:
       - "5005:5005"
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/medical_system
-      PORT: 5005
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/medical_system
+      - PORT=5005
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - medical_network
+    restart: unless-stopped
 
-  # Microservice Doctor
+  # Service Médecins
   doctor-service:
-    build: ./src/backend/services/doctor-service
-    container_name: doctor_service
+    build:
+      context: ./src/backend/services/doctor-service
+      dockerfile: Dockerfile
+    container_name: doctor-service
     ports:
       - "5006:5006"
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/medical_system
-      PORT: 5006
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/medical_system
+      - PORT=5006
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - medical_network
+    restart: unless-stopped
 
-  # Frontend Dashboard
-  dashboard:
-    build: ./src/frontend
-    container_name: medical_dashboard
+  # Service Facturation & IMC
+  billing-service:
+    build:
+      context: ./src/backend/services/billing-service
+      dockerfile: Dockerfile
+    container_name: billing-service
     ports:
-      - "3000:3000"
+      - "5007:5007"
     environment:
-      REACT_APP_PATIENT_API: http://localhost:5002/api
-      REACT_APP_APPOINTMENT_API: http://localhost:5003/api
-      REACT_APP_PRESCRIPTION_API: http://localhost:5004/api
-      REACT_APP_MEDICINE_API: http://localhost:5005/api
-      REACT_APP_DOCTOR_API: http://localhost:5006/api
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/medical_system
+      - PORT=5007
+      - APPOINTMENT_SERVICE_URL=http://appointment-service:5003
+      - PATIENT_SERVICE_URL=http://patient-service:5002
+      - DOCTOR_SERVICE_URL=http://doctor-service:5006
     depends_on:
-      patient-service:
-        condition: service_started
+      postgres:
+        condition: service_healthy
       appointment-service:
         condition: service_started
-      prescription-service:
-        condition: service_started
-      medicine-service:
+      patient-service:
         condition: service_started
       doctor-service:
         condition: service_started
     networks:
       - medical_network
+    restart: unless-stopped
+
+  # Frontend Dashboard
+  dashboard:
+    build:
+      context: ./src/frontend
+      dockerfile: Dockerfile
+    container_name: medical-dashboard
+    ports:
+      - "3000:3000"
+    environment:
+      # ⚠️ IMPORTANT: Utiliser localhost pour accès depuis le navigateur
+      - REACT_APP_AUTH_API=http://localhost:5001/api
+      - REACT_APP_PATIENT_API=http://localhost:5002/api
+      - REACT_APP_APPOINTMENT_API=http://localhost:5003/api
+      - REACT_APP_PRESCRIPTION_API=http://localhost:5004/api
+      - REACT_APP_MEDICINE_API=http://localhost:5005/api
+      - REACT_APP_DOCTOR_API=http://localhost:5006/api
+      - REACT_APP_BILLING_API=http://localhost:5007/api
+    depends_on:
+      - auth-service
+      - patient-service
+      - appointment-service
+      - prescription-service
+      - medicine-service
+      - doctor-service
+      - billing-service
+    networks:
+      - medical_network
+    restart: unless-stopped
 
 volumes:
   postgres_data:

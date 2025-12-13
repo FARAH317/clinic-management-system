@@ -6,3 +6,4 @@ Flask-SQLAlchemy
 requests
 Flask-Migrate
 colorama
+psycopg2-binary

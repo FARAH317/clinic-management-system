@@ -17,8 +17,8 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
 # URLs des autres services
-PATIENT_SERVICE_URL = os.getenv('PATIENT_SERVICE_URL', 'http://localhost:5002')
-MEDICINE_SERVICE_URL = os.getenv('MEDICINE_SERVICE_URL', 'http://localhost:5005')
+PATIENT_SERVICE_URL = os.getenv('PATIENT_SERVICE_URL', 'http://patient-service:5002')
+MEDICINE_SERVICE_URL = os.getenv('MEDICINE_SERVICE_URL', 'http://medicine-service:5005')
 
 # ==================== MODELS ====================
 class Prescription(db.Model):
