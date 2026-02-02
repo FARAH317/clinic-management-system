@@ -14,6 +14,7 @@
   },
   "devDependencies": {
     "autoprefixer": "^10.4.21",
+    "baseline-browser-mapping": "^2.9.19",
     "eslint": "^8.39.0",
     "eslint-config-react-app": "^7.0.1",
     "postcss": "^8.5.6",
