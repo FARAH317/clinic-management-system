@@ -24,12 +24,12 @@ export const PERMISSIONS = {
     settings: { view: true, edit: true }
   },
 
-  // Médecin : accès limité - UNIQUEMENT SON PROFIL
+  // Médecin : accès limité - UNIQUEMENT SON PROFIL ET SES DONNÉES
   doctor: {
     dashboard: true,
     profile: { view: true, edit: true }, // SON profil personnel avec ses stats
     patients: { view: true, create: true, edit: true, delete: false }, // SES patients uniquement
-    doctors: { view: false, create: false, edit: false, delete: false }, // PAS D'ACCÈS à la liste des médecins
+    doctors: { view: false, create: false, edit: false, delete: false }, // ❌ PAS D'ACCÈS à la liste des médecins
     appointments: { view: true, create: true, edit: true, delete: false }, // SES rendez-vous uniquement
     prescriptions: { view: true, create: true, edit: true, delete: false }, // SES ordonnances uniquement
     medicines: { view: true, create: false, edit: false, delete: false }, // Consultation seulement
@@ -38,18 +38,18 @@ export const PERMISSIONS = {
     settings: { view: true, edit: false } // Peut voir mais pas modifier
   },
 
-  // Secrétaire : gestion administrative
+  // Secrétaire : gestion administrative complète (comme admin sauf création d'ordonnances)
   secretary: {
     dashboard: true,
     profile: { view: true, edit: true },
-    patients: { view: true, create: true, edit: true, delete: false },
-    doctors: { view: true, create: false, edit: false, delete: false },
-    appointments: { view: true, create: true, edit: true, delete: true }, // Gestion complète
-    prescriptions: { view: true, create: false, edit: false, delete: false }, // Lecture seule
-    medicines: { view: true, create: false, edit: false, delete: false },
-    billing: { view: true, create: true, edit: true, delete: false }, // Gestion facturation
+    patients: { view: true, create: true, edit: true, delete: true }, // ✅ Accès complet comme admin
+    doctors: { view: true, create: true, edit: true, delete: true }, // ✅ Accès complet comme admin
+    appointments: { view: true, create: true, edit: true, delete: true }, // ✅ Gestion complète
+    prescriptions: { view: true, create: false, edit: false, delete: false }, // ❌ Lecture seule (pas de création)
+    medicines: { view: true, create: true, edit: true, delete: true }, // ✅ Accès complet comme admin
+    billing: { view: true, create: true, edit: true, delete: true }, // ✅ Gestion complète facturation
     activity: { view: true },
-    settings: { view: false, edit: false } // Pas d'accès
+    settings: { view: true, edit: false } // Peut voir mais pas modifier les paramètres système
   }
 };
 
@@ -134,7 +134,7 @@ export const MENU_ITEMS = [
     color: 'text-green-400',
     bgColor: 'bg-green-500/10',
     hoverBg: 'hover:bg-green-500/20',
-    roles: ['admin', 'secretary'] // PAS pour les médecins
+    roles: ['admin', 'secretary'] // ✅ Admin et Secrétaire peuvent voir/gérer les médecins
   },
   {
     name: 'Rendez-vous',
@@ -174,7 +174,7 @@ export const MENU_ITEMS = [
     color: 'text-emerald-400',
     bgColor: 'bg-emerald-500/10',
     hoverBg: 'hover:bg-emerald-500/20',
-    roles: ['admin', 'secretary']
+    roles: ['admin', 'secretary'] // ✅ Admin et Secrétaire
   },
   {
     name: 'Historique',

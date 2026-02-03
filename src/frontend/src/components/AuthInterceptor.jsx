@@ -1,14 +1,16 @@
-import { useEffect, useContext } from 'react';
+import { useEffect, useContext, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
 
 /**
  * Composant pour intercepter les appels API et gérer automatiquement
  * la redirection vers login quand le token expire (401)
+ * ⚠️ IMPORTANT: N'intercepte PAS les requêtes de login elles-mêmes
  */
 export default function AuthInterceptor({ children }) {
   const { logout } = useContext(AuthContext);
   const navigate = useNavigate();
+  const isRedirecting = useRef(false);
 
   useEffect(() => {
     // Sauvegarder la fonction fetch originale
@@ -21,19 +23,47 @@ export default function AuthInterceptor({ children }) {
 
         // Si on reçoit une 401 Unauthorized
         if (response.status === 401) {
-          console.log('Token expiré, redirection vers login...');
+          // Extraire l'URL de manière sûre
+          let url = '';
+          if (typeof args[0] === 'string') {
+            url = args[0];
+          } else if (args[0] instanceof Request) {
+            url = args[0].url;
+          } else if (args[0]?.url) {
+            url = args[0].url;
+          }
+          
+          // ⚠️ NE PAS intercepter si c'est une requête de login
+          const isLoginRequest = url.includes('/auth/login') || 
+                                 url.includes('/api/auth/login') ||
+                                 url.includes('login');
+          
+          if (isLoginRequest) {
+            // Pour les requêtes de login, laisser passer le 401
+            console.log('❌ Échec de connexion : identifiants invalides');
+            return response;
+          }
 
-          // Déconnexion automatique
-          logout();
+          // Pour toutes les autres requêtes avec 401, déconnecter (une seule fois)
+          if (!isRedirecting.current) {
+            isRedirecting.current = true;
+            console.log('🔒 Token expiré, redirection vers login...');
 
-          // Redirection vers login avec message
-          navigate('/admin/login', {
-            state: {
-              message: 'Votre session a expiré. Veuillez vous reconnecter.',
-              from: window.location.pathname
-            },
-            replace: true
-          });
+            // Déconnexion automatique
+            logout();
+
+            // Redirection vers login avec message
+            setTimeout(() => {
+              navigate('/admin/login', {
+                state: {
+                  message: 'Votre session a expiré. Veuillez vous reconnecter.',
+                  from: window.location.pathname
+                },
+                replace: true
+              });
+              isRedirecting.current = false;
+            }, 100);
+          }
 
           // Retourner une réponse d'erreur pour arrêter le traitement
           return new Response(JSON.stringify({
@@ -58,6 +88,7 @@ export default function AuthInterceptor({ children }) {
     // Cleanup: restaurer la fonction fetch originale
     return () => {
       window.fetch = originalFetch;
+      isRedirecting.current = false;
     };
   }, [logout, navigate]);
 

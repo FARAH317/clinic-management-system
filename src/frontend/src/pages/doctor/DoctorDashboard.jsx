@@ -39,8 +39,9 @@ export default function DoctorDashboard() {
         const appointmentsData = await appointmentsRes.json();
         if (appointmentsData.success) {
           // Filtrer UNIQUEMENT les RDV du médecin connecté
-          const myAppointments = appointmentsData.appointments.filter(apt => 
-            apt.doctor_name?.toLowerCase().includes(user?.username?.toLowerCase())
+          const doctorName = `Dr. ${user?.first_name || user?.username}`;
+          const myAppointments = appointmentsData.appointments.filter(apt =>
+            apt.doctor_name === doctorName
           );
           
           setRecentAppointments(myAppointments.slice(0, 5));
@@ -78,8 +79,9 @@ export default function DoctorDashboard() {
       if (prescriptionsRes.ok) {
         const prescriptionsData = await prescriptionsRes.json();
         if (prescriptionsData.success) {
+          const doctorName = `Dr. ${user?.first_name || user?.username}`;
           const myPrescriptions = prescriptionsData.prescriptions.filter(pres =>
-            pres.doctor_name?.toLowerCase().includes(user?.username?.toLowerCase())
+            pres.doctor_name === doctorName
           );
           setStats(prev => ({
             ...prev,
@@ -116,7 +118,7 @@ export default function DoctorDashboard() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold mb-2">
-              Bienvenue Dr. {user?.first_name || user?.username} 👋
+              Bienvenue Dr. {user?.first_name || user?.username} 
             </h1>
             <p className="text-blue-100 text-lg">
               Voici un aperçu de votre activité médicale

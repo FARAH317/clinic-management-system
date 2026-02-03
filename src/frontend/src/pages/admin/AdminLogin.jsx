@@ -112,7 +112,7 @@ function AdminLogin() {
                 <input
                   type="email"
                   name="email"
-                  placeholder="admin@clinique.com"
+                  placeholder="admin@clinic.com"
                   value={formData.email}
                   onChange={handleChange}
                   required
