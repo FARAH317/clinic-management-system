@@ -13,6 +13,8 @@ import AdminLayout from './components/AdminLayout';
 import SecretaryLayout from './components/SecretaryLayout';
 import DoctorLayout from './components/DoctorLayout';
 import ProtectedRoute from './components/ProtectedRoute';
+
+// Pages Admin
 import AdminDashboard from './pages/admin/Dashboard';
 import PatientsPage from './pages/admin/PatientsPage';
 import DoctorsPage from './pages/admin/DoctorsPage';
@@ -21,6 +23,10 @@ import PrescriptionsPage from './pages/admin/PrescriptionsPage';
 import MedicinesPage from './pages/admin/MedecinesPage';
 import BillingPage from './pages/admin/BillingPage';
 import ActivityPage from './pages/admin/ActivityPage';
+
+// Pages Doctor (NOUVELLES)
+import DoctorDashboard from './pages/doctor/DoctorDashboard';
+import DoctorProfile from './pages/doctor/DoctorProfile';
 
 function App() {
   return (
@@ -223,7 +229,7 @@ function App() {
               }
             />
 
-            {/* Doctor Routes - Protected */}
+            {/* ===== DOCTOR ROUTES - NOUVELLES ===== */}
             <Route path="/doctor" element={<Navigate to="/doctor/dashboard" replace />} />
 
             <Route
@@ -231,7 +237,19 @@ function App() {
               element={
                 <ProtectedRoute>
                   <DoctorLayout>
-                    <AdminDashboard />
+                    <DoctorDashboard />
+                  </DoctorLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            {/* ✅ NOUVELLE ROUTE: Mon Profil */}
+            <Route
+              path="/doctor/profile"
+              element={
+                <ProtectedRoute>
+                  <DoctorLayout>
+                    <DoctorProfile />
                   </DoctorLayout>
                 </ProtectedRoute>
               }
@@ -248,16 +266,7 @@ function App() {
               }
             />
 
-            <Route
-              path="/doctor/doctors"
-              element={
-                <ProtectedRoute>
-                  <DoctorLayout>
-                    <DoctorsPage />
-                  </DoctorLayout>
-                </ProtectedRoute>
-              }
-            />
+            {/* ❌ PAS DE /doctor/doctors - médecins n'ont pas accès à la liste */}
 
             <Route
               path="/doctor/appointments"

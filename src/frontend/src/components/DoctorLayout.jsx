@@ -5,7 +5,7 @@ import { MENU_ITEMS, hasPermission } from '../utils/rolePermissions';
 import {
   Users, Calendar, FileText, Pill, Activity,
   UserCheck, History, Menu, X,
-  LogOut, Settings, Bell, ChevronDown
+  LogOut, Settings, Bell, ChevronDown, User
 } from 'lucide-react';
 
 export default function DoctorLayout({ children }) {
@@ -15,13 +15,29 @@ export default function DoctorLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
-  // Filter menu items based on doctor permissions and adjust paths
-  const menuItems = MENU_ITEMS.filter(item =>
-    item.roles.includes('doctor') && hasPermission(user?.role, item.module, 'view')
+  // Filter menu items: EXCLURE "Médecins" et AJOUTER "Mon Profil"
+  const baseMenuItems = MENU_ITEMS.filter(item =>
+    item.roles.includes('doctor') && 
+    hasPermission(user?.role, item.module, 'view') &&
+    item.module !== 'doctors' // ❌ PAS D'ACCÈS à la liste des médecins
   ).map(item => ({
     ...item,
     path: item.path.replace('/admin', '/doctor')
   }));
+
+  // Construire le menu avec "Mon Profil" en 2ème position
+  const menuItems = [
+    baseMenuItems[0], // Dashboard
+    {
+      name: 'Mon Profil',
+      icon: User,
+      path: '/doctor/profile',
+      color: 'text-cyan-400',
+      bgColor: 'bg-cyan-500/10',
+      hoverBg: 'hover:bg-cyan-500/20'
+    },
+    ...baseMenuItems.slice(1) // Reste des items
+  ];
 
   // Fonction de déconnexion avec confirmation
   const handleLogout = () => {
@@ -47,7 +63,7 @@ export default function DoctorLayout({ children }) {
                 </div>
                 <div>
                   <h1 className="text-xl font-bold">CliniqueApp</h1>
-                  <p className="text-xs text-gray-400">Médecin</p>
+                  <p className="text-xs text-gray-400">Espace Médecin</p>
                 </div>
               </div>
             ) : (
@@ -76,9 +92,8 @@ export default function DoctorLayout({ children }) {
           ))}
         </nav>
 
-        {/* Footer avec Paramètres et Déconnexion */}
+        {/* Footer avec Déconnexion */}
         <div className="p-4 border-t border-gray-700 space-y-2">
-          {/* BOUTON DE DÉCONNEXION */}
           <button
             onClick={handleLogout}
             className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-400 hover:bg-red-500/20 hover:text-red-400 transition-all"
@@ -109,13 +124,13 @@ export default function DoctorLayout({ children }) {
       <main className="flex-1 overflow-y-auto">
         {/* Header */}
         <header className="bg-gray-800 shadow-sm border-b border-gray-700 sticky top-0 z-10">
-          <div className="px-8 py-4 flex items-center justify-between">
+          <div className="px-4 sm:px-8 py-4 flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-bold text-white">
                 {menuItems.find(item => item.path === location.pathname)?.name || 'Dashboard'}
               </h2>
               <p className="text-sm text-gray-400 mt-1">
-                Bienvenue sur votre interface médicale
+                Bienvenue Dr. {user?.first_name || user?.username}
               </p>
             </div>
 
@@ -136,7 +151,7 @@ export default function DoctorLayout({ children }) {
                 >
                   <div className="text-right">
                     <p className="text-sm font-medium text-white">
-                      Dr. {user?.username || 'Médecin'}
+                      Dr. {user?.first_name || user?.username}
                     </p>
                     <p className="text-xs text-gray-400">Médecin</p>
                   </div>
@@ -158,7 +173,7 @@ export default function DoctorLayout({ children }) {
                           </div>
                           <div>
                             <p className="text-sm font-semibold text-white">
-                              Dr. {user?.username || 'Médecin'}
+                              Dr. {user?.first_name || user?.username}
                             </p>
                             <p className="text-xs text-gray-400">
                               {user?.email || 'medecin@clinique.com'}
@@ -172,12 +187,23 @@ export default function DoctorLayout({ children }) {
                         <button
                           onClick={() => {
                             setProfileMenuOpen(false);
-                            navigate('/admin/profile');
+                            navigate('/doctor/profile');
+                          }}
+                          className="w-full flex items-center space-x-3 px-4 py-3 text-gray-300 hover:bg-gray-700 hover:text-white transition"
+                        >
+                          <User className="w-4 h-4" />
+                          <span className="text-sm">Mon profil</span>
+                        </button>
+                        
+                        <button
+                          onClick={() => {
+                            setProfileMenuOpen(false);
+                            navigate('/doctor/settings');
                           }}
                           className="w-full flex items-center space-x-3 px-4 py-3 text-gray-300 hover:bg-gray-700 hover:text-white transition"
                         >
                           <Settings className="w-4 h-4" />
-                          <span className="text-sm">Mon profil</span>
+                          <span className="text-sm">Paramètres</span>
                         </button>
                       </div>
 
@@ -209,7 +235,7 @@ export default function DoctorLayout({ children }) {
         </header>
 
         {/* Content */}
-        <div className="p-8 bg-gray-900 min-h-full">
+        <div className="p-4 sm:p-8 bg-gray-900 min-h-full">
           {children}
         </div>
       </main>

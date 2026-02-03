@@ -13,6 +13,7 @@ export const PERMISSIONS = {
   // Admin a accès à tout
   admin: {
     dashboard: true,
+    profile: { view: true, edit: true },
     patients: { view: true, create: true, edit: true, delete: true },
     doctors: { view: true, create: true, edit: true, delete: true },
     appointments: { view: true, create: true, edit: true, delete: true },
@@ -23,22 +24,24 @@ export const PERMISSIONS = {
     settings: { view: true, edit: true }
   },
 
-  // Médecin : accès limité
+  // Médecin : accès limité - UNIQUEMENT SON PROFIL
   doctor: {
     dashboard: true,
-    patients: { view: true, create: true, edit: true, delete: false }, // Peut gérer ses patients
-    doctors: { view: true, create: false, edit: false, delete: false }, // Voir seulement
-    appointments: { view: true, create: true, edit: true, delete: false }, // Ses rendez-vous
-    prescriptions: { view: true, create: true, edit: true, delete: false }, // Ses ordonnances
+    profile: { view: true, edit: true }, // SON profil personnel avec ses stats
+    patients: { view: true, create: true, edit: true, delete: false }, // SES patients uniquement
+    doctors: { view: false, create: false, edit: false, delete: false }, // PAS D'ACCÈS à la liste des médecins
+    appointments: { view: true, create: true, edit: true, delete: false }, // SES rendez-vous uniquement
+    prescriptions: { view: true, create: true, edit: true, delete: false }, // SES ordonnances uniquement
     medicines: { view: true, create: false, edit: false, delete: false }, // Consultation seulement
     billing: { view: false, create: false, edit: false, delete: false }, // Pas d'accès
-    activity: { view: true }, // Son historique seulement
+    activity: { view: true }, // SON historique seulement
     settings: { view: true, edit: false } // Peut voir mais pas modifier
   },
 
   // Secrétaire : gestion administrative
   secretary: {
     dashboard: true,
+    profile: { view: true, edit: true },
     patients: { view: true, create: true, edit: true, delete: false },
     doctors: { view: true, create: false, edit: false, delete: false },
     appointments: { view: true, create: true, edit: true, delete: true }, // Gestion complète
@@ -101,7 +104,17 @@ export const MENU_ITEMS = [
     color: 'text-blue-400',
     bgColor: 'bg-blue-500/10',
     hoverBg: 'hover:bg-blue-500/20',
-    roles: [ROLES.ADMIN, ROLES.DOCTOR, ROLES.SECRETARY]
+    roles: ['admin', 'doctor', 'secretary']
+  },
+  {
+    name: 'Mon Profil',
+    path: '/admin/profile',
+    module: 'profile',
+    icon: 'User',
+    color: 'text-cyan-400',
+    bgColor: 'bg-cyan-500/10',
+    hoverBg: 'hover:bg-cyan-500/20',
+    roles: ['doctor'] // UNIQUEMENT pour les médecins
   },
   {
     name: 'Patients',
@@ -111,7 +124,7 @@ export const MENU_ITEMS = [
     color: 'text-indigo-400',
     bgColor: 'bg-indigo-500/10',
     hoverBg: 'hover:bg-indigo-500/20',
-    roles: [ROLES.ADMIN, ROLES.DOCTOR, ROLES.SECRETARY]
+    roles: ['admin', 'doctor', 'secretary']
   },
   {
     name: 'Médecins',
@@ -121,7 +134,7 @@ export const MENU_ITEMS = [
     color: 'text-green-400',
     bgColor: 'bg-green-500/10',
     hoverBg: 'hover:bg-green-500/20',
-    roles: [ROLES.ADMIN, ROLES.DOCTOR, ROLES.SECRETARY]
+    roles: ['admin', 'secretary'] // PAS pour les médecins
   },
   {
     name: 'Rendez-vous',
@@ -131,7 +144,7 @@ export const MENU_ITEMS = [
     color: 'text-purple-400',
     bgColor: 'bg-purple-500/10',
     hoverBg: 'hover:bg-purple-500/20',
-    roles: [ROLES.ADMIN, ROLES.DOCTOR, ROLES.SECRETARY]
+    roles: ['admin', 'doctor', 'secretary']
   },
   {
     name: 'Ordonnances',
@@ -141,7 +154,7 @@ export const MENU_ITEMS = [
     color: 'text-pink-400',
     bgColor: 'bg-pink-500/10',
     hoverBg: 'hover:bg-pink-500/20',
-    roles: [ROLES.ADMIN, ROLES.DOCTOR, ROLES.SECRETARY]
+    roles: ['admin', 'doctor', 'secretary']
   },
   {
     name: 'Médicaments',
@@ -151,7 +164,7 @@ export const MENU_ITEMS = [
     color: 'text-orange-400',
     bgColor: 'bg-orange-500/10',
     hoverBg: 'hover:bg-orange-500/20',
-    roles: [ROLES.ADMIN, ROLES.DOCTOR, ROLES.SECRETARY]
+    roles: ['admin', 'doctor', 'secretary']
   },
   {
     name: 'Facturation & IMC',
@@ -161,7 +174,7 @@ export const MENU_ITEMS = [
     color: 'text-emerald-400',
     bgColor: 'bg-emerald-500/10',
     hoverBg: 'hover:bg-emerald-500/20',
-    roles: [ROLES.ADMIN, ROLES.SECRETARY]
+    roles: ['admin', 'secretary']
   },
   {
     name: 'Historique',
@@ -171,6 +184,6 @@ export const MENU_ITEMS = [
     color: 'text-cyan-400',
     bgColor: 'bg-cyan-500/10',
     hoverBg: 'hover:bg-cyan-500/20',
-    roles: [ROLES.ADMIN, ROLES.DOCTOR, ROLES.SECRETARY]
+    roles: ['admin', 'doctor', 'secretary']
   }
 ];
