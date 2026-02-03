@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { FileText, Search, Plus, X, Download, Trash2 } from 'lucide-react';
+import { AuthContext } from '../../contexts/AuthContext';
+import { hasPermission } from '../../utils/rolePermissions';
 
 const API_URLS = {
   prescription: 'http://localhost:5004/api',
@@ -9,6 +11,7 @@ const API_URLS = {
 };
 
 export default function PrescriptionsPage() {
+  const { user } = useContext(AuthContext);
   const [prescriptions, setPrescriptions] = useState([]);
   const [patients, setPatients] = useState([]);
   const [doctors, setDoctors] = useState([]);

@@ -18,7 +18,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
 # URLs des autres services
-PATIENT_SERVICE_URL = os.getenv('PATIENT_SERVICE_URL', 'http://patient-service:5002')
+PATIENT_SERVICE_URL = os.getenv('PATIENT_SERVICE_URL', 'http://localhost:5002')
 
 # ==================== MODELS ====================
 class Appointment(db.Model):
@@ -61,6 +61,33 @@ def get_patient_from_service(patient_id):
         print(f"Erreur lors de la récupération du patient: {e}")
         return None
 
+def update_past_appointments():
+    """Mettre à jour automatiquement le statut des rendez-vous passés"""
+    try:
+        now = datetime.utcnow()
+
+        # Mettre à jour les rendez-vous passés qui ne sont pas encore terminés ou annulés
+        past_appointments = Appointment.query.filter(
+            Appointment.appointment_date < now,
+            Appointment.status == 'scheduled'  # Ne mettre à jour que les rendez-vous planifiés
+        ).all()
+
+        updated_count = 0
+        for appointment in past_appointments:
+            appointment.status = 'completed'
+            appointment.updated_at = datetime.utcnow()
+            updated_count += 1
+
+        if updated_count > 0:
+            db.session.commit()
+            print(f"✅ {updated_count} rendez-vous passés automatiquement marqués comme terminés")
+
+        return updated_count
+    except Exception as e:
+        print(f"Erreur lors de la mise à jour automatique des rendez-vous: {e}")
+        db.session.rollback()
+        return 0
+
 # ==================== ROUTES ====================
 
 @app.route('/health', methods=['GET'])
@@ -71,11 +98,14 @@ def health_check():
 def get_appointments():
     """Récupérer tous les rendez-vous"""
     try:
+        # Mettre à jour automatiquement les rendez-vous passés avant de récupérer la liste
+        update_past_appointments()
+
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 10, type=int)
         status = request.args.get('status')
         date = request.args.get('date')  # Format: YYYY-MM-DD
-        
+
         query = Appointment.query
         
         # Filtrer par statut
@@ -170,10 +200,16 @@ def create_appointment():
                 return jsonify({'success': False, 'error': 'Impossible de créer le patient'}), 500
 
         # Créer le rendez-vous
+        # Handle both formats: with seconds and without seconds
+        try:
+            appointment_date = datetime.strptime(data['appointment_date'], '%Y-%m-%d %H:%M:%S')
+        except ValueError:
+            appointment_date = datetime.strptime(data['appointment_date'], '%Y-%m-%d %H:%M')
+
         appointment = Appointment(
             patient_id=patient_id,
             doctor_name=data['doctor_name'],
-            appointment_date=datetime.strptime(data['appointment_date'], '%Y-%m-%d %H:%M'),
+            appointment_date=appointment_date,
             duration=data.get('duration', 30),
             reason=data.get('reason'),
             notes=data.get('notes')
@@ -200,7 +236,11 @@ def update_appointment(appointment_id):
         if 'doctor_name' in data:
             appointment.doctor_name = data['doctor_name']
         if 'appointment_date' in data:
-            appointment.appointment_date = datetime.strptime(data['appointment_date'], '%Y-%m-%d %H:%M')
+            # Handle both formats: with seconds and without seconds
+            try:
+                appointment.appointment_date = datetime.strptime(data['appointment_date'], '%Y-%m-%d %H:%M:%S')
+            except ValueError:
+                appointment.appointment_date = datetime.strptime(data['appointment_date'], '%Y-%m-%d %H:%M')
         if 'duration' in data:
             appointment.duration = data['duration']
         if 'status' in data:
@@ -283,12 +323,27 @@ def get_patient_appointments(patient_id):
         appointments = Appointment.query.filter_by(patient_id=patient_id)\
             .order_by(Appointment.appointment_date.desc())\
             .all()
-        
+
         return jsonify({
             'success': True,
             'appointments': [apt.to_dict() for apt in appointments]
         }), 200
-        
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/appointments/update-past', methods=['POST'])
+def manual_update_past_appointments():
+    """Mettre à jour manuellement les rendez-vous passés (endpoint admin)"""
+    try:
+        updated_count = update_past_appointments()
+
+        return jsonify({
+            'success': True,
+            'message': f'{updated_count} rendez-vous passés mis à jour',
+            'updated_count': updated_count
+        }), 200
+
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 

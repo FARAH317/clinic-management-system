@@ -1,5 +1,5 @@
 import React, { useState, useContext } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../../contexts/AuthContext';
 import { Lock, Mail, AlertCircle, Eye, EyeOff, Activity } from 'lucide-react';
 
@@ -33,17 +33,26 @@ function AdminLogin() {
 
       const data = await response.json();
 
-      if (response.ok && data.user?.role === 'admin') {
+      if (response.ok && data.user) {
         // Utilise setUser du contexte qui sauvegarde automatiquement
         setUser(data.user);
-        
+
         // Optionnel : Sauvegarde du token si fourni par le backend
         if (data.token) {
           localStorage.setItem('token', data.token);
         }
 
-        // Redirection vers le dashboard
-        navigate('/admin/dashboard');
+        // Redirection vers le dashboard selon le rôle
+        const role = data.user.role;
+        if (role === 'admin') {
+          navigate('/admin/dashboard');
+        } else if (role === 'secretary') {
+          navigate('/secretary/dashboard');
+        } else if (role === 'doctor') {
+          navigate('/doctor/dashboard');
+        } else {
+          setError('Rôle utilisateur non reconnu');
+        }
       } else {
         setError(data.error || 'Identifiants incorrects ou accès refusé');
       }
@@ -64,7 +73,7 @@ function AdminLogin() {
       </div>
 
       {/* Login Card */}
-      <div className="relative w-full max-w-md">
+      <div className="relative w-full max-w-sm sm:max-w-md">
         <div className="bg-gray-800 rounded-2xl shadow-2xl border border-gray-700 p-8">
           {/* Logo/Icon */}
           <div className="flex justify-center mb-6">
@@ -153,9 +162,9 @@ function AdminLogin() {
                 />
                 Se souvenir de moi
               </label>
-              <a href="#" className="text-blue-400 hover:text-blue-300 transition">
+              <Link to="/admin/forgot-password" className="text-blue-400 hover:text-blue-300 transition">
                 Mot de passe oublié ?
-              </a>
+              </Link>
             </div>
 
             {/* Submit Button */}

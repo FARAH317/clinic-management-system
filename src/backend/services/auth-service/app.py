@@ -416,18 +416,47 @@ def validate_token():
     try:
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
-        
+
         if not user or not user.is_active:
             return jsonify({'success': False, 'error': 'Token invalide'}), 401
-        
+
         return jsonify({
             'success': True,
             'valid': True,
             'user': user.to_dict()
         }), 200
-        
+
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 401
+
+@app.route('/api/auth/forgot-password', methods=['POST'])
+def forgot_password():
+    """Envoyer un email de réinitialisation de mot de passe"""
+    try:
+        data = request.get_json()
+
+        if not data or 'email' not in data:
+            return jsonify({'success': False, 'error': 'Email requis'}), 400
+
+        email = data['email'].strip()
+
+        if not validate_email(email):
+            return jsonify({'success': False, 'error': 'Format email invalide'}), 400
+
+        # Vérifier si l'utilisateur existe
+        user = User.query.filter_by(email=email).first()
+        if not user:
+            # Pour des raisons de sécurité, on ne révèle pas si l'email existe ou non
+            return jsonify({'success': True, 'message': 'Si cet email est associé à un compte, un lien de réinitialisation a été envoyé.'}), 200
+
+        # TODO: Générer un token de réinitialisation et envoyer un email
+        # Pour l'instant, on simule le succès
+        print(f"TODO: Envoyer email de réinitialisation à {email}")
+
+        return jsonify({'success': True, 'message': 'Si cet email est associé à un compte, un lien de réinitialisation a été envoyé.'}), 200
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 # ==================== MAIN ====================
 if __name__ == '__main__':

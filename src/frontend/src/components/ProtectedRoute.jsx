@@ -1,10 +1,11 @@
 import React, { useContext } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
+import { hasPermission } from '../utils/rolePermissions';
 
 /**
  * Composant pour protéger les routes nécessitant une authentification
- * Compatible avec votre AuthContext existant
+ * Compatible avec votre AuthContext existant et gestion des rôles
  */
 export default function ProtectedRoute({ children }) {
   const { user } = useContext(AuthContext);
@@ -15,8 +16,20 @@ export default function ProtectedRoute({ children }) {
     return <Navigate to="/admin/login" state={{ from: location }} replace />;
   }
 
-  // Vérifie si l'utilisateur est admin
-  if (user.role !== 'admin') {
+  // Détermine le module basé sur le chemin
+  const path = location.pathname;
+  let module = 'dashboard'; // default
+
+  if (path.includes('/patients')) module = 'patients';
+  else if (path.includes('/doctors')) module = 'doctors';
+  else if (path.includes('/appointments')) module = 'appointments';
+  else if (path.includes('/prescriptions')) module = 'prescriptions';
+  else if (path.includes('/medicines')) module = 'medicines';
+  else if (path.includes('/billing')) module = 'billing';
+  else if (path.includes('/activity')) module = 'activity';
+
+  // Vérifie les permissions
+  if (!hasPermission(user.role, module, 'view')) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center">

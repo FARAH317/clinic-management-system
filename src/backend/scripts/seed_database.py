@@ -130,6 +130,14 @@ USERS = [
         'first_name': 'Marie',
         'last_name': 'Dubois',
         'role': 'nurse'
+    },
+    {
+        'username': 'secretary.jane',
+        'email': 'jane@clinic.com',
+        'password': 'Secretary@123',
+        'first_name': 'Jane',
+        'last_name': 'Doe',
+        'role': 'secretary'
     }
 ]
 
@@ -664,7 +672,8 @@ def main():
     print("  Admin:         admin / Admin@123")
     print("  Docteur:       dr.smith / Doctor@123")
     print("  Docteur:       dr.jones / Doctor@123")
-    print("  Infirmière:    nurse.marie / Nurse@123\n")
+    print("  Infirmière:    nurse.marie / Nurse@123")
+    print("  Secrétaire:    secretary.jane / Secretary@123\n")
 
 
 if __name__ == "__main__":

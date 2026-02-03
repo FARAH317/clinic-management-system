@@ -219,7 +219,8 @@ export default function Dashboard() {
 
   const getTimeAgo = (dateString) => {
     try {
-      const date = new Date(dateString);
+      // Parse the UTC date string correctly by appending 'Z' to indicate UTC
+      const date = new Date(dateString + 'Z');
       const now = new Date();
       const diffMs = now - date;
       const diffMins = Math.floor(diffMs / 60000);
@@ -348,7 +349,7 @@ export default function Dashboard() {
                   Voir tout
                 </button>
               </div>
-              <ul className="space-y-4">
+              <ul className="space-y-4"> 
                 {recentActivities.map((act, index) => (
                   <li key={index} className="flex items-start p-3 rounded-lg hover:bg-gray-700/50 transition">
                     <div className={`p-2 rounded-lg ${act.color} bg-opacity-10 flex-shrink-0`}>

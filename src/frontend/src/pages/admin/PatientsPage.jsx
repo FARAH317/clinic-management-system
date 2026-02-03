@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Search, Download, Edit, Trash2, Plus, X } from 'lucide-react';
+import { Users, Search, Download, Edit, Trash2, Plus, X, Upload, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const API_URL = 'http://localhost:5002/api';
 

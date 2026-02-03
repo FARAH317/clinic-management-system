@@ -88,6 +88,7 @@ export default function AppointmentsPage() {
     }
   };
 
+  // ✅ FONCTION CORRIGÉE
   const handleAddAppointment = async () => {
     try {
       if (!newAppointment.patient_id || !newAppointment.doctor_id || 
@@ -103,7 +104,17 @@ export default function AppointmentsPage() {
       const selectedPatient = patients.find(p => p.id === parseInt(newAppointment.patient_id));
       const patientName = selectedPatient ? `${selectedPatient.first_name} ${selectedPatient.last_name}` : '';
 
+      // ✅ FIX: Envoyer TOUTES les données patient requises par le backend
       const appointmentData = {
+        // Données patient (requises par le backend)
+        first_name: selectedPatient?.first_name || '',
+        last_name: selectedPatient?.last_name || '',
+        email: selectedPatient?.email || '',
+        phone: selectedPatient?.phone || '',
+        date_of_birth: selectedPatient?.date_of_birth || '1990-01-01',
+        gender: selectedPatient?.gender || 'Homme',
+        
+        // Données rendez-vous
         patient_id: parseInt(newAppointment.patient_id),
         doctor_id: parseInt(newAppointment.doctor_id),
         doctor_name: doctorName,
@@ -113,6 +124,8 @@ export default function AppointmentsPage() {
         status: 'scheduled',
         duration: 30
       };
+
+      console.log('📤 Envoi des données:', appointmentData); // Pour debug
 
       const response = await fetch(`${API_URLS.appointment}/appointments`, {
         method: 'POST',
